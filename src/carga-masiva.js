@@ -14,6 +14,7 @@ const clearQueueBtn = document.getElementById('clear-queue-btn');
 // Elementos del link público
 const linkPublicoInput = document.getElementById('link-publico');
 const copiarLinkBtn = document.getElementById('copiar-link-btn');
+const abrirLinkBtn = document.getElementById('abrir-link-btn');
 const qrCanvas = document.getElementById('qr-canvas');
 
 // --- ESTADO DE LA APLICACIÓN ---
@@ -53,6 +54,7 @@ function setupPublicLink() {
     const path = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
     const link = `${window.location.origin}${path}/carga-publica.html`;
     linkPublicoInput.value = link;
+    abrirLinkBtn.href = link;
 
     new QRious({ element: qrCanvas, value: link, size: 120 });
 

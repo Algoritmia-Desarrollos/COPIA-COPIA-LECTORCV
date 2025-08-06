@@ -18,14 +18,26 @@ let selectedFile = null;
 function handleFile(file) {
   if (file && file.type === 'application/pdf' && file.size <= 5 * 1024 * 1024) {
     selectedFile = file;
-    fileLabelText.textContent = `Archivo seleccionado: ${selectedFile.name}`;
+    dropZone.classList.add('file-selected');
+    fileLabelText.innerHTML = `
+      <i class="fa-solid fa-file-pdf" style="color: var(--success-color); font-size: 2rem; margin-bottom: 0.5rem;"></i>
+      <span class="file-name">${selectedFile.name}</span>
+      <span class="upload-hint" style="margin-top: 0.5rem;">¡Listo para enviar!</span>
+    `;
     submitBtn.disabled = false;
     dropZone.classList.remove('drag-over');
   } else {
     selectedFile = null;
     submitBtn.disabled = true;
-    fileLabelText.textContent = 'Arrastra y suelta tu CV aquí o haz clic para seleccionar';
-    if (file) alert("Por favor, selecciona un archivo PDF de menos de 5MB.");
+    dropZone.classList.remove('file-selected');
+    fileLabelText.innerHTML = `
+      <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+      <span class="upload-text">Arrastra y suelta tu CV aquí o haz clic para seleccionar</span>
+      <span class="upload-hint">Solo archivos PDF, tamaño máximo: 5MB</span>
+    `;
+    if (file) {
+      alert("Por favor, selecciona un archivo PDF de menos de 5MB.");
+    }
   }
 }
 

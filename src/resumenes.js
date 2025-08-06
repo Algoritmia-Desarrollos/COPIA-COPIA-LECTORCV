@@ -1,7 +1,7 @@
 // src/resumenes.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase } from './utils.js';
+import { toTitleCase, showModal, hideModal } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const panelTitle = document.getElementById('panel-title');
@@ -16,8 +16,6 @@ const bulkActionsCount = document.getElementById('bulk-actions-count');
 const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
 const modalContainer = document.getElementById('modal-container');
 const modalTitle = document.getElementById('modal-title');
-const modalCloseBtn = document.getElementById('modal-close');
-const modalCancelBtn = document.getElementById('modal-cancel');
 const modalSaveNotesBtn = document.getElementById('modal-save-notes');
 const modalResumenContent = document.getElementById('modal-resumen-content');
 const modalNotasTextarea = document.getElementById('modal-notas-textarea');
@@ -141,18 +139,20 @@ async function analizarUnaPostulacion(postulacion, total) {
 
 async function analizarPostulantesPendientes() {
     const postulacionesNuevas = postulacionesCache.filter(p => p.calificacion === null);
-    
+    const totalPostulaciones = postulacionesCache.length;
+    const maxCv = avisoActivo.max_cv || 'Ilimitados';
+
     if (postulacionesNuevas.length > 0) {
         const totalNuevas = postulacionesNuevas.length;
-        processingStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin"></i> Preparando análisis para ${totalNuevas} candidatos...`;
+        processingStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin"></i> Preparando análisis para ${totalNuevas} de ${totalPostulaciones} candidatos...`;
         
         // Procesar en paralelo
         const analysisPromises = postulacionesNuevas.map(p => analizarUnaPostulacion(p, totalNuevas));
         await Promise.all(analysisPromises);
 
-        processingStatus.textContent = "¡Análisis completado!";
+        processingStatus.textContent = `¡Análisis completado! Se han procesado ${totalNuevas} nuevos candidatos. Total: ${totalPostulaciones} / ${maxCv}.`;
     } else {
-        processingStatus.textContent = "Todos los candidatos están analizados.";
+        processingStatus.textContent = `Todos los ${totalPostulaciones} / ${maxCv} candidatos están analizados.`;
     }
 }
 
@@ -381,7 +381,7 @@ function abrirModalResumen(postulacion) {
     modalNotasTextarea.classList.add('hidden');
     
     modalSaveNotesBtn.classList.add('hidden');
-    abrirModal();
+    showModal('modal-container');
 }
 
 function abrirModalNotas(postulacion) {
@@ -405,21 +405,10 @@ function abrirModalNotas(postulacion) {
             actualizarFilaEnVista(postulacion.id, { notas: nuevasNotas });
         }
         
-        cerrarModal();
+        hideModal('modal-container');
     };
-    abrirModal();
+    showModal('modal-container');
 }
-function abrirModal() { 
-    modalContainer.classList.remove('hidden'); 
-    document.body.classList.add('modal-open');
-}
-function cerrarModal() { 
-    modalContainer.classList.add('hidden'); 
-    document.body.classList.remove('modal-open');
-}
-modalCloseBtn.addEventListener('click', cerrarModal);
-modalCancelBtn.addEventListener('click', cerrarModal);
-modalContainer.addEventListener('click', (e) => { if (e.target === modalContainer) cerrarModal(); });
 
 // --- FUNCIONES AUXILIARES ---
 async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArchivo, avisoId) {

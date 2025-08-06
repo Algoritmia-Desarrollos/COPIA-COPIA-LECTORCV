@@ -108,83 +108,89 @@
   <script type="module" src="src/detalles-aviso.js"></script>
 
   <!-- Modal para Editar Aviso -->
-  <div id="modal-edit-aviso" class="modal-overlay" style="display: none;">
+  <div id="modal-edit-aviso" class="modal-overlay hidden">
     <div class="modal-container">
-      <div class="modal-header">
-        <h2>Editar Aviso</h2>
-        <button class="modal-close-btn" data-modal-id="modal-edit-aviso">&times;</button>
-      </div>
-      <div class="modal-content">
-        <form id="edit-aviso-form">
-          <div class="form-group">
-            <label for="edit-descripcion">Descripción del Puesto</label>
-            <textarea id="edit-descripcion" class="form-control" rows="5"></textarea>
-          </div>
-          <div class="form-group">
-            <label>Condiciones Necesarias (Excluyentes)</label>
-            <div class="condition-input-group">
-              <input type="text" id="edit-necesaria-input" class="form-control" placeholder="Añadir condición...">
-              <button type="button" id="add-necesaria-btn-edit" class="btn btn-primary add-btn">+</button>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Editar Aviso</h2>
+                <button class="modal-close-btn">&times;</button>
             </div>
-            <ul id="necesarias-list-edit" class="condition-list"></ul>
-          </div>
-          <div class="form-group">
-            <label>Condiciones Deseables (Suman Puntos)</label>
-            <div class="condition-input-group">
-              <input type="text" id="edit-deseable-input" class="form-control" placeholder="Añadir condición...">
-              <button type="button" id="add-deseable-btn-edit" class="btn btn-primary add-btn">+</button>
+            <div class="modal-body">
+                <form id="edit-aviso-form">
+                    <div class="form-group">
+                        <label for="edit-descripcion">Descripción del Puesto</label>
+                        <textarea id="edit-descripcion" class="form-control" rows="5"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Condiciones Necesarias (Excluyentes)</label>
+                        <div class="condition-input-group">
+                            <input type="text" id="edit-necesaria-input" class="form-control" placeholder="Añadir condición...">
+                            <button type="button" id="add-necesaria-btn-edit" class="btn btn-primary add-btn">+</button>
+                        </div>
+                        <ul id="necesarias-list-edit" class="condition-list"></ul>
+                    </div>
+                    <div class="form-group">
+                        <label>Condiciones Deseables (Suman Puntos)</label>
+                        <div class="condition-input-group">
+                            <input type="text" id="edit-deseable-input" class="form-control" placeholder="Añadir condición...">
+                            <button type="button" id="add-deseable-btn-edit" class="btn btn-primary add-btn">+</button>
+                        </div>
+                        <ul id="deseables-list-edit" class="condition-list"></ul>
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-max-cv">Máximo de CVs (0 para ilimitado)</label>
+                        <input type="number" id="edit-max-cv" class="form-control" min="0">
+                    </div>
+                    <div class="form-group">
+                        <label for="edit-valido-hasta">Válido Hasta</label>
+                        <input type="date" id="edit-valido-hasta" class="form-control">
+                    </div>
+                </form>
             </div>
-            <ul id="deseables-list-edit" class="condition-list"></ul>
-          </div>
-          <div class="form-group">
-            <label for="edit-max-cv">Máximo de CVs (0 para ilimitado)</label>
-            <input type="number" id="edit-max-cv" class="form-control" min="0">
-          </div>
-          <div class="form-group">
-            <label for="edit-valido-hasta">Válido Hasta</label>
-            <input type="date" id="edit-valido-hasta" class="form-control">
-          </div>
-        </form>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary modal-close-btn" data-modal-id="modal-edit-aviso">Cancelar</button>
-        <button id="confirm-edit-aviso-btn" class="btn btn-primary">Guardar Cambios</button>
-      </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                <button type="button" id="confirm-edit-aviso-btn" class="btn btn-primary">Guardar Cambios</button>
+            </div>
+        </div>
     </div>
-  </div>
+</div>
 
   <!-- Modals -->
-  <div id="modal-add-from-db" class="modal-overlay" style="display: none;">
+  <div id="modal-add-from-db" class="modal-overlay hidden">
     <div class="modal-container">
-      <div class="modal-header">
-        <h2>Agregar Candidatos desde la Base</h2>
-        <button class="modal-close-btn" data-modal-id="modal-add-from-db">&times;</button>
-      </div>
-      <div class="modal-content" id="db-modal-content">
-        <p>Cargando carpetas...</p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary modal-close-btn" data-modal-id="modal-add-from-db">Cancelar</button>
-        <button id="confirm-add-from-db" class="btn btn-primary">Agregar Seleccionados</button>
-      </div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Agregar Candidatos desde la Base</h2>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="db-modal-content">
+                <p>Cargando carpetas...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                <button type="button" id="confirm-add-from-db" class="btn btn-primary">Agregar Seleccionados</button>
+            </div>
+        </div>
     </div>
-  </div>
+</div>
 
-  <div id="modal-add-from-aviso" class="modal-overlay" style="display: none;">
+  <div id="modal-add-from-aviso" class="modal-overlay hidden">
     <div class="modal-container">
-      <div class="modal-header">
-        <h2>Agregar Candidatos desde otro Aviso</h2>
-        <button class="modal-close-btn" data-modal-id="modal-add-from-aviso">&times;</button>
-      </div>
-      <div class="modal-content" id="aviso-modal-content">
-        <p>Cargando avisos...</p>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary modal-close-btn" data-modal-id="modal-add-from-aviso">Cancelar</button>
-        <button id="confirm-add-from-aviso" class="btn btn-primary">Agregar Seleccionados</button>
-      </div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Agregar Candidatos desde otro Aviso</h2>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div class="modal-body" id="aviso-modal-content">
+                <p>Cargando avisos...</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                <button type="button" id="confirm-add-from-aviso" class="btn btn-primary">Agregar Seleccionados</button>
+            </div>
+        </div>
     </div>
-  </div>
+</div>
 
 </body>
 </html>

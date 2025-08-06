@@ -73,6 +73,9 @@ function renderizarTabla(avisos, postulaciones) {
         });
 
         const row = document.createElement('tr');
+        row.style.cursor = 'pointer';
+        row.dataset.avisoId = aviso.id;
+
         row.innerHTML = `
             <td>${aviso.id}</td>
             <td><strong>${aviso.titulo}</strong></td>
@@ -85,6 +88,16 @@ function renderizarTabla(avisos, postulaciones) {
                 </div>
             </td>
         `;
+
+        row.addEventListener('click', (e) => {
+            // Si el clic fue en un botón o un enlace dentro de la fila, no hacer nada.
+            if (e.target.closest('a, button')) {
+                return;
+            }
+            // Si no, navegar a la página de postulantes.
+            window.location.href = `resumenes.html?avisoId=${aviso.id}`;
+        });
+
         avisoListBody.appendChild(row);
     });
 }

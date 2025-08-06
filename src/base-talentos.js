@@ -1,6 +1,7 @@
 // src/base-talentos.js
 
 import { supabase } from './supabaseClient.js';
+import { showModal, hideModal } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const folderList = document.getElementById('folder-list');
@@ -30,17 +31,13 @@ const newFolderNameInput = document.getElementById('new-folder-name');
 const parentFolderSelect = document.getElementById('parent-folder-select');
 
 // Modales
-const editModalContainer = document.getElementById('edit-modal-container');
-const editModalCloseBtn = document.getElementById('edit-modal-close');
 const editForm = document.getElementById('edit-form');
 const editCandidateIdInput = document.getElementById('edit-candidate-id');
 const editNombreInput = document.getElementById('edit-nombre');
 const editEmailInput = document.getElementById('edit-email');
 const editTelefonoInput = document.getElementById('edit-telefono');
-const textModalContainer = document.getElementById('text-modal-container');
 const textModalTitle = document.getElementById('text-modal-title');
 const textModalBody = document.getElementById('text-modal-body');
-const textModalCloseBtn = document.getElementById('text-modal-close');
 
 // --- ESTADO GLOBAL ---
 let carpetasCache = [];
@@ -73,11 +70,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     showAddFolderFormBtn.addEventListener('click', () => toggleAddFolderForm(true));
     cancelAddFolderBtn.addEventListener('click', () => toggleAddFolderForm(false));
     addFolderBtn.addEventListener('click', createNewFolder);
-    editModalCloseBtn.addEventListener('click', closeEditModal);
-    editModalContainer.addEventListener('click', (e) => e.target === editModalContainer && closeEditModal());
     editForm.addEventListener('submit', handleEditFormSubmit);
-    textModalCloseBtn.addEventListener('click', closeTextModal);
-    textModalContainer.addEventListener('click', (e) => e.target === textModalContainer && closeTextModal());
 });
 
 
@@ -502,9 +495,9 @@ async function openTextModal(id) {
     if (error || !data) { alert('No se pudo cargar el texto del CV.'); return; }
     textModalTitle.textContent = `Texto de: ${data.nombre_candidato}`;
     textModalBody.textContent = data.texto_cv_general || 'No hay texto extraído.';
-    textModalContainer.classList.remove('hidden');
+    showModal('text-modal-container');
 }
-function closeTextModal() { textModalContainer.classList.add('hidden'); }
+
 async function openEditModal(id) {
     const { data, error } = await supabase.from('v2_candidatos').select('id, nombre_candidato, email, telefono').eq('id', id).single();
     if (error || !data) { alert('No se pudo cargar el candidato.'); return; }
@@ -512,9 +505,9 @@ async function openEditModal(id) {
     editNombreInput.value = data.nombre_candidato || '';
     editEmailInput.value = data.email || '';
     editTelefonoInput.value = data.telefono || '';
-    editModalContainer.classList.remove('hidden');
+    showModal('edit-modal-container');
 }
-function closeEditModal() { editModalContainer.classList.add('hidden'); }
+
 async function handleEditFormSubmit(e) {
     e.preventDefault();
     const id = editCandidateIdInput.value;
@@ -524,5 +517,5 @@ async function handleEditFormSubmit(e) {
         telefono: editTelefonoInput.value,
     };
     const { error } = await supabase.from('v2_candidatos').update(updatedData).eq('id', id);
-    if (error) { alert("Error al actualizar."); } else { closeEditModal(); loadCandidates(); }
+    if (error) { alert("Error al actualizar."); } else { hideModal('edit-modal-container'); loadCandidates(); }
 }
