@@ -4,12 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel de Candidatos - Fagaz CV</title>
-
-    <script type="module" src="src/auth-guard.js"></script>
+  
+  <script type="module" src="src/auth-guard.js"></script>
 
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
 </head>
 <body>
 
@@ -30,14 +29,10 @@
       <div class="dashboard-header">
         <h1 id="panel-title">Cargando panel de candidatos...</h1>
         <div class="actions-group">
-            <button id="link-postulantes-btn" class="btn btn-secondary">
-                <i class="fa-solid fa-link"></i>
-                Link para Postulantes
-            </button>
-            <button id="cargar-cv-btn" class="btn btn-primary">
-                <i class="fa-solid fa-upload"></i>
-                Cargar CV
-            </button>
+            <a id="details-link-btn" class="btn btn-secondary" href="#">
+                <i class="fa-solid fa-circle-info"></i>
+                Ver Detalles del Aviso
+            </a>
             <a href="lista-avisos.html" class="btn btn-secondary">
                 <i class="fa-solid fa-arrow-left"></i>
                 Ver todas las búsquedas
@@ -47,10 +42,6 @@
 
       <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;">
         Iniciando...
-      </div>
-
-      <div id="filtro-container" class="form-group hidden" style="margin-top: 1rem; margin-bottom: 1.5rem;">
-        <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar por nombre...">
       </div>
       
       <div class="table-container">
@@ -65,11 +56,11 @@
           <thead>
             <tr>
               <th><input type="checkbox" id="select-all-checkbox"></th>
-              <th>Archivo</th>
               <th>Nombre Candidato</th>
-              <th>Calificación</th>
-              <th>Análisis IA</th>
-              <th>Notas</th>
+              <th>Email</th>
+              <th>Teléfono</th>
+              <th>Calificación IA</th>
+              <th>Análisis</th>
               <th>Acciones</th>
             </tr>
           </thead>

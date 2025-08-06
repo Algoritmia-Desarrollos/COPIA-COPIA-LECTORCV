@@ -1,7 +1,7 @@
 // src/index.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase } from './utils.js'; // Importamos nuestra nueva función
+import { toTitleCase } from './utils.js'; // Importamos nuestra función de formato
 
 // --- SELECTORES DEL DOM ---
 const fileInput = document.getElementById('file-input');
@@ -99,7 +99,7 @@ cvForm.addEventListener('submit', async (e) => {
 // --- FUNCIONES AUXILIARES ---
 
 async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArchivo, avisoId) {
-    // ===== CAMBIO CLAVE: Usamos el nombre formateado como identificador =====
+    // ===== LÓGICA CORRECTA: Usamos el nombre formateado como identificador =====
     const formattedName = toTitleCase(iaData.nombreCompleto);
     if (!formattedName) throw new Error("No se pudo extraer un nombre válido del CV.");
 
@@ -133,9 +133,8 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
         });
 
     if (postulaError) {
-      // Si la postulación ya existe, no lo tratamos como un error fatal.
       if (postulaError.code === '23505') { // Código de error para violación de constraint UNIQUE
-        console.warn('El candidato ya se había postulado a este aviso.');
+        console.warn('El candidato ya se había postulado a este aviso. Se actualizó su perfil general.');
       } else {
         throw new Error(`Error al guardar postulación: ${postulaError.message}`);
       }
@@ -154,7 +153,7 @@ function fileToBase64(file) {
 async function extraerTextoDePDF(base64) {
     const pdf = await pdfjsLib.getDocument(base64).promise;
     let textoFinal = '';
-    try { // Intento de extracción nativa (rápida)
+    try {
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
@@ -163,7 +162,7 @@ async function extraerTextoDePDF(base64) {
         if (textoFinal.trim().length > 100) return textoFinal.trim().replace(/\x00/g, '');
     } catch (error) { console.warn("Fallo en extracción nativa, intentando OCR.", error); }
     
-    try { // Fallback a OCR (lento pero robusto)
+    try {
         textoFinal = '';
         const worker = await Tesseract.createWorker('spa');
         const { data: { text } } = await worker.recognize(base64);
@@ -176,7 +175,8 @@ async function extraerDatosConIA(textoCV) {
     const textoCVOptimizado = textoCV.substring(0, 4000);
     const prompt = `Actúa como un experto en RRHH. Analiza el siguiente CV y extrae nombre completo, email y teléfono. Texto: """${textoCVOptimizado}""" Responde únicamente con un objeto JSON con claves "nombreCompleto", "email" y "telefono". Si no encuentras un dato, usa null.`;
     
-    const { data, error } = await supabase.functions.invoke('openai', { body: { query: prompt } });
+    // ===== CORRECCIÓN IMPORTANTE: Asegúrate de llamar a la función de IA correcta. Si la renombraste a "openaiv2", cámbialo aquí. =====
+    const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
     if (error) throw new Error(`Error con el servicio de IA: ${error.message}`);
     try { return JSON.parse(data.message); }
     catch (e) { throw new Error("La IA devolvió una respuesta con formato inesperado."); }

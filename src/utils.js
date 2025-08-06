@@ -6,9 +6,9 @@
  * @param {string} str El string del nombre a formatear.
  * @returns {string|null} El nombre formateado o null si la entrada es inválida.
  */
+// src/utils.js
 export function toTitleCase(str) {
   if (!str || typeof str !== 'string') return null;
-  // Reemplaza múltiples espacios con uno solo, convierte a minúsculas y luego capitaliza cada palabra.
   return str.toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(word => {
     return word.charAt(0).toUpperCase() + word.slice(1);
   }).join(' ');
