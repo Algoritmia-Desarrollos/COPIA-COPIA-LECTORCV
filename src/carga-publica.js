@@ -1,6 +1,7 @@
 // src/carga-publica.js
 
 import { supabase } from './supabaseClient.js';
+import { toTitleCase } from './utils.js'; // Importamos la función de formato
 
 // --- SELECTORES DEL DOM ---
 const fileInput = document.getElementById('file-input');
@@ -13,8 +14,7 @@ const dropZone = document.getElementById('drop-zone');
 
 let selectedFile = null;
 
-// --- MANEJO DE ARCHIVOS (IDÉNTICO AL ANTERIOR) ---
-
+// --- MANEJO DE ARCHIVOS ---
 function handleFile(file) {
   if (file && file.type === 'application/pdf' && file.size <= 5 * 1024 * 1024) {
     selectedFile = file;
@@ -25,8 +25,7 @@ function handleFile(file) {
     selectedFile = null;
     submitBtn.disabled = true;
     fileLabelText.textContent = 'Arrastra y suelta tu CV aquí o haz clic para seleccionar';
-    if (file && file.type !== 'application/pdf') alert("Por favor, selecciona un archivo en formato PDF.");
-    else if (file && file.size > 5 * 1024 * 1024) alert("El archivo es demasiado grande. El tamaño máximo es de 5MB.");
+    if (file) alert("Por favor, selecciona un archivo PDF de menos de 5MB.");
   }
 }
 
@@ -42,20 +41,13 @@ cvForm.addEventListener('submit', async (e) => {
     if (!selectedFile) return;
 
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando CV...';
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
 
     try {
         const base64 = await fileToBase64(selectedFile);
-        
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Extrayendo texto...';
         const textoCV = await extraerTextoDePDF(base64);
-        if (!textoCV || textoCV.trim().length < 50) throw new Error("PDF vacío o ilegible.");
-        
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Obteniendo contacto...';
         const iaData = await extraerDatosConIA(textoCV);
-        if (!iaData.email) throw new Error("No se pudo extraer una dirección de email válida del CV.");
 
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando en Base de Datos...';
         await procesarCandidato(iaData, base64, textoCV, selectedFile.name);
         
         formView.classList.add('hidden');
@@ -76,50 +68,30 @@ cvForm.addEventListener('submit', async (e) => {
  * Lógica para crear o actualizar un candidato en la base de talentos.
  */
 async function procesarCandidato(iaData, base64, textoCV, nombreArchivo) {
-    const formattedName = toTitleCase(iaData.nombreCompleto);
-    if (!formattedName) throw new Error("El nombre extraído del CV no es válido.");
-
-    const { data: candidatoExistente, error: findError } = await supabase
-        .from('v2_candidatos')
-        .select('id, email')
-        .eq('nombre_candidato', formattedName)
-        .maybeSingle();
-
-    if (findError) throw new Error(`Error al buscar candidato: ${findError.message}`);
-
-    const candidatoData = {
-        nombre_candidato: formattedName,
-        telefono: iaData.telefono,
-        email: iaData.email,
-        base64_general: base64,
-        texto_cv_general: textoCV,
-        nombre_archivo_general: nombreArchivo,
-        updated_at: new Date().toISOString()
-    };
-
-    let error;
-    if (candidatoExistente) {
-        if (candidatoExistente.email === iaData.email) {
-            ({ error } = await supabase.from('v2_candidatos').update(candidatoData).eq('id', candidatoExistente.id));
-        } else {
-            ({ error } = await supabase.from('v2_candidatos').insert(candidatoData));
-        }
-    } else {
-        ({ error } = await supabase.from('v2_candidatos').insert(candidatoData));
+    // ===== LÓGICA DE ACEPTACIÓN GARANTIZADA =====
+    let nombreFormateado = toTitleCase(iaData.nombreCompleto);
+    
+    if (!nombreFormateado) {
+        nombreFormateado = `Candidato No Identificado ${Date.now()}`;
     }
+
+    // Usamos 'upsert' para crear o actualizar el candidato en un solo paso.
+    const { error } = await supabase
+        .from('v2_candidatos')
+        .upsert({
+            nombre_candidato: nombreFormateado,
+            email: iaData.email || 'no-extraido@dominio.com',
+            telefono: iaData.telefono,
+            base64_general: base64,
+            texto_cv_general: textoCV,
+            nombre_archivo_general: nombreArchivo,
+            updated_at: new Date()
+        }, {
+            onConflict: 'nombre_candidato' // La clave para evitar duplicados es el nombre
+        });
 
     if (error) throw new Error(`Error en base de datos: ${error.message}`);
 }
-
-function toTitleCase(str) {
-    if (!str || typeof str !== 'string') return null;
-    return str.toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(word => {
-        return word.charAt(0).toUpperCase() + word.slice(1);
-    }).join(' ');
-}
-
-// Las siguientes funciones son idénticas a las de `src/index.js`
-// y se pueden reutilizar, pero las incluimos aquí para que el archivo sea autónomo.
 
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
@@ -131,43 +103,40 @@ function fileToBase64(file) {
 }
 
 async function extraerTextoDePDF(base64) {
-    const pdf = await pdfjsLib.getDocument(base64).promise;
-    let textoFinal = '';
     try {
+        const pdf = await pdfjsLib.getDocument(base64).promise;
+        let textoFinal = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             textoFinal += textContent.items.map(item => item.str).join(' ');
         }
-        if (textoFinal.trim().length > 100) return textoFinal.trim().replace(/\x00/g, '');
-    } catch (error) { console.warn("Fallo en extracción nativa, intentando OCR.", error); }
-
+        if (textoFinal.trim().length > 50) return textoFinal.trim().replace(/\x00/g, '');
+    } catch (error) {
+        console.warn("Extracción nativa fallida, intentando con OCR.", error);
+    }
+    
     try {
-        textoFinal = '';
         const worker = await Tesseract.createWorker('spa');
         const { data: { text } } = await worker.recognize(base64);
         await worker.terminate();
-        return text;
-    } catch (error) { throw new Error("No se pudo leer el contenido del PDF."); }
+        return text || "Texto no legible por OCR";
+    } catch (error) {
+        console.error("Error de OCR:", error);
+        return "El contenido del PDF no pudo ser leído.";
+    }
 }
 
 async function extraerDatosConIA(textoCV) {
     const textoCVOptimizado = textoCV.substring(0, 4000);
-    const prompt = `
-      Actúa como un experto en RRHH. Analiza el siguiente CV y extrae el nombre completo, email y teléfono.
-      Texto: """${textoCVOptimizado}"""
-      Responde únicamente con un objeto JSON con claves "nombreCompleto", "email" y "telefono". Si no encuentras un dato, usa null.
-    `;
+    const prompt = `Actúa como un experto en RRHH. Analiza el siguiente CV y extrae nombre completo, email y teléfono. Texto: """${textoCVOptimizado}""" Responde únicamente con un objeto JSON con claves "nombreCompleto", "email" y "telefono". Si no encuentras un dato, usa null.`;
     
-    const { data, error } = await supabase.functions.invoke('openai', {
-        body: { query: prompt },
-    });
-
-    if (error) throw new Error(`Error con el servicio de IA: ${error.message}`);
-
     try {
+        const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
+        if (error) throw error;
         return JSON.parse(data.message);
     } catch (e) {
-        throw new Error("La IA devolvió una respuesta con formato inesperado.");
+        console.error("Error al contactar o parsear la respuesta de la IA:", e);
+        return { nombreCompleto: null, email: null, telefono: null };
     }
 }

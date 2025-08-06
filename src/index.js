@@ -71,18 +71,13 @@ cvForm.addEventListener('submit', async (e) => {
     if (!selectedFile || !avisoActivo) return;
 
     submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analizando CV...';
+    submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
 
     try {
         const base64 = await fileToBase64(selectedFile);
-        
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Extrayendo texto...';
         const textoCV = await extraerTextoDePDF(base64);
-        
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Obteniendo contacto...';
         const iaData = await extraerDatosConIA(textoCV);
         
-        submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando postulación...';
         await procesarCandidatoYPostulacion(iaData, base64, textoCV, selectedFile.name, avisoActivo.id);
         
         formView.classList.add('hidden');
@@ -99,30 +94,34 @@ cvForm.addEventListener('submit', async (e) => {
 // --- FUNCIONES AUXILIARES ---
 
 async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArchivo, avisoId) {
-    // ===== LÓGICA CORRECTA: Usamos el nombre formateado como identificador =====
-    const formattedName = toTitleCase(iaData.nombreCompleto);
-    if (!formattedName) throw new Error("No se pudo extraer un nombre válido del CV.");
+    // ===== NUEVA LÓGICA DE ACEPTACIÓN GARANTIZADA =====
+    let nombreFormateado = toTitleCase(iaData.nombreCompleto);
+    
+    // Si no se extrae un nombre, creamos uno único para evitar conflictos.
+    if (!nombreFormateado) {
+        nombreFormateado = `Candidato No Identificado ${Date.now()}`;
+    }
 
-    // Usamos 'upsert' para crear o actualizar el candidato en un solo paso, evitando duplicados por nombre.
+    // Usamos 'upsert' para crear o actualizar el candidato en un solo paso.
     const { data: candidato, error: upsertError } = await supabase
         .from('v2_candidatos')
         .upsert({
-            nombre_candidato: formattedName,
-            email: iaData.email,
+            nombre_candidato: nombreFormateado,
+            email: iaData.email || 'no-extraido@dominio.com',
             telefono: iaData.telefono,
             base64_general: base64,
             texto_cv_general: textoCV,
             nombre_archivo_general: nombreArchivo,
             updated_at: new Date()
         }, {
-            onConflict: 'nombre_candidato' // Le decimos a Supabase que el nombre es la clave para detectar conflictos
+            onConflict: 'nombre_candidato'
         })
         .select('id')
         .single();
     
     if (upsertError) throw new Error(`Error al procesar candidato: ${upsertError.message}`);
 
-    // Ahora creamos la postulación con el ID del candidato (sea nuevo o existente)
+    // Ahora creamos la postulación.
     const { error: postulaError } = await supabase
         .from('v2_postulaciones')
         .insert({
@@ -130,13 +129,15 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
             aviso_id: avisoId,
             base64_cv_especifico: base64,
             texto_cv_especifico: textoCV
+            // La calificación (null) indica que está pendiente de análisis
         });
 
+    // Manejamos el caso de que el candidato intente postularse dos veces al mismo aviso.
     if (postulaError) {
-      if (postulaError.code === '23505') { // Código de error para violación de constraint UNIQUE
-        console.warn('El candidato ya se había postulado a este aviso. Se actualizó su perfil general.');
+      if (postulaError.code === '23505') { // Error de 'unique constraint violation'
+        alert('Ya te has postulado a esta búsqueda. Hemos actualizado tu CV con esta nueva versión.');
       } else {
-        throw new Error(`Error al guardar postulación: ${postulaError.message}`);
+        throw new Error(`Error al guardar la postulación: ${postulaError.message}`);
       }
     }
 }
@@ -151,33 +152,42 @@ function fileToBase64(file) {
 }
 
 async function extraerTextoDePDF(base64) {
-    const pdf = await pdfjsLib.getDocument(base64).promise;
-    let textoFinal = '';
     try {
+        const pdf = await pdfjsLib.getDocument(base64).promise;
+        let textoFinal = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             textoFinal += textContent.items.map(item => item.str).join(' ');
         }
-        if (textoFinal.trim().length > 100) return textoFinal.trim().replace(/\x00/g, '');
-    } catch (error) { console.warn("Fallo en extracción nativa, intentando OCR.", error); }
+        if (textoFinal.trim().length > 50) return textoFinal.trim().replace(/\x00/g, '');
+    } catch (error) {
+        console.warn("Extracción nativa fallida, intentando con OCR.", error);
+    }
     
+    // Fallback a OCR si la extracción nativa no funciona
     try {
-        textoFinal = '';
         const worker = await Tesseract.createWorker('spa');
         const { data: { text } } = await worker.recognize(base64);
         await worker.terminate();
-        return text;
-    } catch (error) { throw new Error("No se pudo leer el contenido del PDF."); }
+        return text || "Texto no legible por OCR";
+    } catch (error) {
+        console.error("Error de OCR:", error);
+        return "El contenido del PDF no pudo ser leído.";
+    }
 }
 
 async function extraerDatosConIA(textoCV) {
     const textoCVOptimizado = textoCV.substring(0, 4000);
     const prompt = `Actúa como un experto en RRHH. Analiza el siguiente CV y extrae nombre completo, email y teléfono. Texto: """${textoCVOptimizado}""" Responde únicamente con un objeto JSON con claves "nombreCompleto", "email" y "telefono". Si no encuentras un dato, usa null.`;
     
-    // ===== CORRECCIÓN IMPORTANTE: Asegúrate de llamar a la función de IA correcta. Si la renombraste a "openaiv2", cámbialo aquí. =====
-    const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
-    if (error) throw new Error(`Error con el servicio de IA: ${error.message}`);
-    try { return JSON.parse(data.message); }
-    catch (e) { throw new Error("La IA devolvió una respuesta con formato inesperado."); }
+    try {
+        const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
+        if (error) throw error;
+        return JSON.parse(data.message);
+    } catch (e) {
+        console.error("Error al contactar o parsear la respuesta de la IA:", e);
+        // Devolvemos un objeto vacío para que el flujo continúe
+        return { nombreCompleto: null, email: null, telefono: null };
+    }
 }
