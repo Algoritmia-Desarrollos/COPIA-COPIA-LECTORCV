@@ -28,9 +28,9 @@
   </nav>
 
   <main class="main-container">
-    <div style="position: relative;">
+    <div class="db-layout">
       
-      <aside id="bulk-actions-container" class="sidebar-wrapper floating hidden">
+      <aside id="bulk-actions-container" class="sidebar-wrapper hidden">
         <div class="panel-container">
             <h3 id="bulk-actions-title">Acciones</h3>
             <p id="bulk-actions-count" class="text-light" style="margin-bottom: 1rem;">0 seleccionados</p>
@@ -41,33 +41,35 @@
         </div>
       </aside>
 
-      <div class="panel-container">
-        <div class="dashboard-header">
-          <h1 id="panel-title">Cargando panel...</h1>
-          <div class="actions-group">
-              <button id="upload-cv-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar CVs</button>
-              <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles del Aviso</a>
-              <a href="lista-avisos.html" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Volver</a>
+      <div class="main-content">
+        <div class="panel-container">
+          <div class="dashboard-header">
+            <h1 id="panel-title">Cargando panel...</h1>
+            <div class="actions-group">
+                <button id="upload-cv-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar CVs</button>
+                <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles del Aviso</a>
+                <a href="lista-avisos.html" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Volver</a>
+            </div>
           </div>
-        </div>
 
-        <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;">Iniciando...</div>
-        
-        <div class="table-container">
-          <table id="cv-table" class="data-table">
-            <thead>
-              <tr>
-                <th style="width: 5%;"><input type="checkbox" id="select-all-checkbox"></th>
-                <th style="width: 20%;">Nombre Candidato</th>
-                <th style="width: 20%;">Archivo</th>
-                <th style="width: 20%;">Contacto</th>
-                <th style="width: 15%;">Calificación IA</th>
-                <th style="width: 10%;">Análisis</th>
-                <th style="width: 10%;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="resumenes-list"></tbody>
-          </table>
+          <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;">Iniciando...</div>
+          
+          <div class="table-container">
+            <table id="cv-table" class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 5%;"><input type="checkbox" id="select-all-checkbox"></th>
+                  <th style="width: 20%;">Nombre Candidato</th>
+                  <th style="width: 20%;">Archivo</th>
+                  <th style="width: 20%;">Contacto</th>
+                  <th style="width: 15%;">Calificación IA</th>
+                  <th style="width: 10%;">Análisis</th>
+                  <th style="width: 10%;">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="resumenes-list"></tbody>
+            </table>
+          </div>
         </div>
       </div>
 
