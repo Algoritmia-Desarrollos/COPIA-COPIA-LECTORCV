@@ -26,6 +26,7 @@ let postulacionesCache = [];
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
+    // Es crucial inicializar la librería pdf.js para que esté disponible.
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -69,6 +70,7 @@ async function cargarPostulantes(avisoId) {
 
     if (error) {
         processingStatus.textContent = 'Error al cargar postulantes.';
+        console.error("Error:", error);
         return;
     }
     postulacionesCache = data;
@@ -208,6 +210,7 @@ async function descargarCV(candidato, button) {
     try {
         const { data, error } = await supabase.from('v2_candidatos').select('base64_general, nombre_archivo_general').eq('id', candidato.id).single();
         if (error || !data) throw new Error('No se encontró el CV en la base de talentos.');
+        
         const link = document.createElement('a');
         link.href = data.base64_general;
         link.download = data.nombre_archivo_general || 'cv.pdf';
@@ -236,7 +239,7 @@ uploadCvBtn.addEventListener('click', () => {
             uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Subiendo ${index + 1}/${files.length}`;
             try {
                 const base64 = await fileToBase64(file);
-                const textoCV = await extraerTextoDePDF(file); // Pasamos el 'File'
+                const textoCV = await extraerTextoDePDF(file);
                 const iaData = await extraerDatosConIA(textoCV);
                 await procesarCandidatoYPostulacion(iaData, base64, textoCV, file.name, avisoActivo.id);
             } catch (error) {
@@ -294,6 +297,7 @@ function abrirModalResumen(postulacion) {
     modalSaveNotesBtn.classList.add('hidden');
     abrirModal();
 }
+
 function abrirModalNotas(postulacion) {
     const nombre = postulacion.v2_candidatos?.nombre_candidato || postulacion.nombre_candidato_snapshot;
     modalTitle.textContent = `Notas sobre ${nombre}`;
@@ -307,6 +311,7 @@ function abrirModalNotas(postulacion) {
     };
     abrirModal();
 }
+
 function abrirModal() { modalContainer.classList.remove('hidden'); }
 function cerrarModal() { modalContainer.classList.add('hidden'); }
 modalCloseBtn.addEventListener('click', cerrarModal);
@@ -335,6 +340,7 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
     });
     if (postulaError && postulaError.code !== '23505') { throw new Error(`Error: ${postulaError.message}`); }
 }
+
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -343,6 +349,7 @@ function fileToBase64(file) {
         reader.onerror = error => reject(error);
     });
 }
+
 async function extraerTextoDePDF(file) {
     try {
         const arrayBuffer = await file.arrayBuffer();
@@ -358,10 +365,13 @@ async function extraerTextoDePDF(file) {
     try {
         const { data: { text } } = await Tesseract.recognize(file, 'spa');
         return text || "Texto no legible por OCR";
-    } catch (error) { return "Contenido no legible."; }
+    } catch (error) {
+        return "Contenido no legible.";
+    }
 }
+
 async function extraerDatosConIA(texto) {
-    const prompt = `Actúa como RRHH... (tu prompt de extracción simple va aquí) ...`;
+    const prompt = `Actúa como RRHH. Extrae nombre, email y teléfono. Texto: """${texto.substring(0,4000)}""" Responde solo JSON con claves "nombreCompleto", "email", y "telefono". Si no encuentras, usa null.`;
     try {
         const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
         if (error) throw error;

@@ -51,7 +51,7 @@ a:hover { color: var(--primary-hover); }
 
 /* --- 3. LAYOUT Y CONTENEDORES --- */
 .main-container {
-  max-width: 1600px; /* Aumentado para más espacio */
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem 1.5rem;
 }
@@ -223,28 +223,24 @@ a:hover { color: var(--primary-hover); }
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  table-layout: auto; /* Cambiado a auto para más flexibilidad */
 }
 .data-table th, .data-table td {
-  padding: 1rem;
-  border-bottom: none; /* Se quita el borde de la celda */
-  vertical-align: middle; /* Se centra verticalmente */
-  white-space: normal; /* Permite que el texto se ajuste */
-  word-break: break-word; /* Evita que palabras largas rompan el layout */
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+  height: 65px; /* Altura de fila FIJA */
+  box-sizing: border-box;
 }
-
-/* No hay efecto de hover para expandir celdas */
-
-.data-table tbody tr {
-    transition: background-color 0.2s ease;
-    border-bottom: 1px solid var(--border-color); /* Se aplica el borde a la fila */
-}
+.data-table tbody tr:has(.postulacion-checkbox:checked),
 .data-table tbody tr:has(.candidate-checkbox:checked) {
     background-color: #eef2ff;
     box-shadow: inset 3px 0 0 0 var(--primary-color);
 }
 .data-table tbody tr:hover {
     background-color: #f8fafc;
+}
+.data-table tbody tr {
+    cursor: pointer;
 }
 .data-table thead th {
   font-weight: 600;
@@ -254,46 +250,12 @@ a:hover { color: var(--primary-hover); }
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.actions-group {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.25rem;
+.actions-group { 
+  display: flex; 
+  flex-wrap: nowrap; 
+  gap: 0.5rem; 
+  height: 100%;
   align-items: center;
-}
-
-.actions-group .btn {
-  padding: 0.4rem 0.6rem;
-  flex-shrink: 0; /* Evita que los botones se encojan */
-}
-
-.actions-group .btn[data-action="edit"],
-.actions-group .btn[data-action="delete"] {
-  padding: 0.4rem;
-  width: 2rem;
-  height: 2rem;
-  font-size: 0.8rem;
-}
-
-.candidate-name {
-    font-weight: 600;
-    color: var(--text-dark);
-}
-
-.candidate-file, .text-light {
-    font-size: 0.875rem;
-    color: var(--text-light);
-}
-
-/* ===== CORRECCIÓN: Estilos de fila para Drag & Drop y Selección ===== */
-.data-table tbody tr {
-    cursor: pointer;
-}
-.data-table tbody tr[draggable="true"]:active {
-    cursor: grabbing;
-}
-.data-table tbody tr.dragging {
-    opacity: 0.5;
-    background-color: #eef2ff;
 }
 
 /* Modal (Pop-up) */
@@ -352,21 +314,16 @@ a:hover { color: var(--primary-hover); }
 .drop-zone .upload-text { font-weight: 600; color: var(--text-dark); }
 .drop-zone .upload-hint { font-size: 0.875rem; color: var(--text-light); margin-top: 0.5rem; }
 
-/* Layout Base de Talentos */
+/* Layout Base de Talentos y Resúmenes */
 .db-layout {
   display: grid;
   grid-template-columns: 320px 1fr;
   gap: 2rem; align-items: flex-start;
 }
-.sidebar-wrapper { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 1.5rem; }
+.sidebar-wrapper { position: sticky; top: 90px; }
 .folder-list { list-style: none; padding: 0; margin: 0; }
-.folder-list ul {
-    list-style: none;
-    padding-left: 0;
-    margin: 0.25rem 0;
-}
 .folder-list .folder-item {
-  display: flex; align-items: center; gap: 0.25rem;
+  display: flex; align-items: center; gap: 0.75rem;
   padding: 0.75rem 1rem; border-radius: var(--radius-md);
   cursor: pointer; transition: background-color 0.2s;
 }
@@ -378,87 +335,80 @@ a:hover { color: var(--primary-hover); }
     color: var(--text-dark) !important;
 }
 
-/* --- Estilos para carpetas desplegables --- */
-.nested-folder-list {
-    display: none; /* Ocultar sub-carpetas por defecto */
-    padding-left: 0;
-    list-style: none;
-}
-
-li.expanded > .nested-folder-list {
-    display: block; /* Mostrar sub-carpetas cuando el padre está expandido */
-}
-
-.folder-toggle-icon {
-    cursor: pointer;
-    transition: transform 0.2s ease;
-    width: 1em; /* Alineación */
-    text-align: center;
-    margin-right: 0.25rem;
-}
-
-.folder-toggle-icon-placeholder {
-    display: inline-block;
-    width: 1em;
-    margin-right: 0.25rem;
-}
-
-li.expanded > .folder-item .folder-toggle-icon {
-    transform: rotate(90deg);
-}
-
-.folder-item-actions {
-  display: none;
-  margin-left: auto;
-}
-
-.folder-item:hover .folder-item-actions {
-  display: flex;
-}
-
-.btn-icon {
-  background: none;
-  border: none;
-  color: var(--text-light);
-  cursor: pointer;
-  padding: 0.25rem;
-}
-.btn-icon:hover {
-  color: var(--text-dark);
-}
-
 /* Cola de Carga Masiva */
-.upload-queue-list {
-  list-style: none; padding: 0; margin: 1.5rem 0;
-  border: 1px solid var(--border-color); border-radius: var(--radius-lg);
-  max-height: 400px; overflow-y: auto;
-}
-.queue-item {
-  display: flex; flex-wrap: wrap; align-items: center;
-  gap: 1rem; padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-.queue-item:last-child { border-bottom: none; }
-.queue-item .file-name { font-weight: 500; flex-grow: 1; }
-.queue-item .status-badge {
-  font-size: 0.8rem; font-weight: 600; padding: 0.25rem 0.6rem;
-  border-radius: 9999px; white-space: nowrap; text-transform: capitalize;
-}
-.status-pendiente .status-badge { background-color: #e0e7ff; color: #4338ca; }
-.status-procesando .status-badge { background-color: #fef9c3; color: #854d0e; }
-.status-exito .status-badge { background-color: #dcfce7; color: #166534; }
-.status-error .status-badge { background-color: #fee2e2; color: #991b1b; }
-.queue-item .error-message { width: 100%; font-size: 0.8rem; color: var(--danger-color); margin-top: 0.25rem; }
-.queue-item-empty { text-align: center; padding: 2rem; color: var(--text-light); }
-.queue-actions { display: flex; justify-content: space-between; align-items: center; }
+.upload-queue-list { /* ... */ }
+.queue-item { /* ... */ }
 
 /* Link Público y QR */
-.share-section {
-  display: flex; flex-wrap: wrap;
-  align-items: center; gap: 1rem;
+.share-section { /* ... */ }
+
+
+/* ===== AJUSTES FINALES PARA RESUMENES Y BASE DE TALENTOS ===== */
+
+/* Estilo para el panel de acciones flotante a la DERECHA */
+.sidebar-wrapper.floating {
+    position: absolute;
+    top: 0;
+    right: -280px; /* Posición inicial fuera de la pantalla */
+    width: 250px;
+    z-index: 10;
+    transition: transform 0.3s ease-in-out;
 }
-.share-section .link-group { display: flex; flex-grow: 1; }
-.share-section .qr-code { padding: 0.5rem; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+
+.sidebar-wrapper.floating.visible {
+    transform: translateX(-280px); /* Mueve el panel a la vista desde la derecha */
+}
+
+/* Ajustes en la tabla para que ocupe más espacio y se vea mejor */
+.data-table {
+  table-layout: auto; /* Permite que las columnas se ajusten al contenido */
+  width: 100%;
+}
+.data-table td, .data-table th {
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.data-table .candidate-name-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+    overflow: hidden;
+}
+
+.data-table .candidate-name {
+    font-weight: 600;
+    color: var(--text-dark);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.data-table .candidate-filename {
+    font-size: 0.8rem; /* Tamaño de fuente más chico para el nombre del archivo */
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.data-table td:first-child, .data-table th:first-child {
+  padding-left: 1.5rem; /* Más espacio a la izquierda para que no se pegue al borde */
+}
+.data-table td:last-child, .data-table th:last-child {
+  text-align: right;
+  padding-right: 1.5rem;
+}
+.data-table .actions-group {
+    justify-content: flex-end;
+}
+.data-table tbody tr[draggable="true"] {
+    cursor: grab;
+}
+.data-table tbody tr[draggable="true"]:active {
+    cursor: grabbing;
+}
 
 
 /* --- 6. DISEÑO RESPONSIVE --- */
@@ -473,7 +423,6 @@ li.expanded > .folder-item .folder-toggle-icon {
   .main-container { padding: 1.5rem 1rem; }
   .dashboard-header { flex-direction: column; align-items: flex-start; }
   
-  /* Menú Hamburguesa */
   .nav-menu {
     display: none; flex-direction: column;
     width: 100%; background-color: var(--bg-white);
@@ -483,74 +432,20 @@ li.expanded > .folder-item .folder-toggle-icon {
   .nav-menu.active { display: flex; }
   .nav-toggle { display: block; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
   
-  /* Layouts de una columna */
   .db-layout, .details-grid { grid-template-columns: 1fr; }
   .sidebar-wrapper, .details-sidebar { position: static; }
-}
-
-@media (max-width: 480px) {
-  .dashboard-header h1 { font-size: 1.5rem; }
-  .btn { padding: 0.6rem 1rem; }
-  .queue-actions { flex-direction: column; gap: 0.5rem; align-items: stretch; }
-  .queue-actions .btn { justify-content: center; }
-}
-
-
-/* ===== AJUSTES FINALES PARA RESUMENES Y BASE DE TALENTOS ===== */
-
-/* Ajustes en la tabla para que ocupe más espacio y se vea mejor */
-.data-table {
-  table-layout: fixed; /* Asegura que las columnas respeten el ancho */
-}
-
-.data-table th, .data-table td {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 1rem 0.75rem; /* Reduce un poco el padding horizontal */
-}
-
-.data-table th:first-child, .data-table td:first-child {
-  padding-left: 1rem; /* Mantiene un buen margen a la izquierda */
-}
-
-.data-table td:last-child, .data-table th:last-child {
-  width: auto; /* Quitado el ancho fijo */
-  min-width: 140px; /* Asegura un ancho mínimo para los botones */
-}
-
-.data-table .actions-group {
-  justify-content: flex-end; /* Alinea los botones a la derecha de la celda */
-  flex-wrap: nowrap;
-}
-
-#talentos-table .actions-group {
-    justify-content: flex-end;
-}
-
-.data-table tbody tr {
-  border-bottom: 1px solid var(--border-color); /* Borde aplicado a la fila */
-}
-
-.db-layout {
-    display: flex;
-    gap: 2rem;
-    align-items: flex-start;
-}
-
-.sidebar-wrapper {
-    position: sticky;
-    top: 90px;
-    height: calc(100vh - 110px);
-    flex-shrink: 0;
-    width: 280px;
-}
-
-.main-content {
-    flex-grow: 1;
-    min-width: 0;
-}
-
-#bulk-actions-container.hidden {
-    display: none;
+  
+  /* Hacemos el panel flotante fijo en móviles */
+  .sidebar-wrapper.floating {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    transform: translateY(100%);
+    transition: transform 0.3s ease-in-out;
+  }
+  .sidebar-wrapper.floating.visible {
+    transform: translateY(0);
+  }
 }

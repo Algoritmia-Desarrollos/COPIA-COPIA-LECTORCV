@@ -33,7 +33,7 @@
               <div id="add-folder-form" class="hidden" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
                   <div class="form-group"><label for="new-folder-name">Nombre</label><input type="text" id="new-folder-name"></div>
                   <div class="form-group"><label for="parent-folder-select">Ubicación</label><select id="parent-folder-select"><option value="">Raíz</option></select></div>
-                  <div class="form-actions"><button id="cancel-add-folder-btn" class="btn btn-secondary">Cancelar</button><button id="add-folder-btn" class="btn btn-primary">Guardar</button></div>
+                  <div class="form-actions" style="display: flex; gap: 0.5rem;"><button id="cancel-add-folder-btn" class="btn btn-secondary">Cancelar</button><button id="add-folder-btn" class="btn btn-primary">Guardar</button></div>
               </div>
           </div>
         </div>
@@ -57,29 +57,28 @@
             </div>
 
             <div class="form-group" style="margin-top: 1rem; margin-bottom: 1.5rem;">
-                <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar en la vista actual...">
+                <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar por nombre, email o teléfono en toda la base de datos...">
             </div>
             
             <div class="table-container">
               <table id="talentos-table" class="data-table">
-                <colgroup>
-                  <col style="width: 5%;">
-                  <col style="width: 30%;">
-                  <col style="width: 15%;">
-                  <col style="width: 30%;">
-                  <col style="width: 20%;">
-                </colgroup>
                 <thead>
                   <tr>
-                    <th><input type="checkbox" id="select-all-checkbox"></th>
-                    <th>Nombre Candidato</th>
-                    <th>Ubicación</th>
-                    <th>Contacto</th>
-                    <th style="text-align: right;">Acciones</th>
+                    <th style="width: 5%;"><input type="checkbox" id="select-all-checkbox"></th>
+                    <th style="width: 30%;">Nombre Candidato</th>
+                    <th style="width: 15%;">Ubicación</th>
+                    <th style="width: 30%;">Contacto</th>
+                    <th style="width: 20%; text-align: right;">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="talentos-list-body"></tbody>
               </table>
+            </div>
+
+            <div id="table-pagination" class="table-pagination-footer hidden">
+              <button id="table-prev-page-btn" class="btn btn-secondary">Anterior</button>
+              <span id="table-page-indicator"></span>
+              <button id="table-next-page-btn" class="btn btn-secondary">Siguiente</button>
             </div>
         </div>
       </div>
@@ -87,10 +86,10 @@
   </main>
 
   <div id="edit-modal-container" class="modal-container hidden">
-    <div class="modal-content"><div class="modal-header"><h2 id="edit-modal-title">Editar Candidato</h2><button id="edit-modal-close" class="modal-close-btn">&times;</button></div><form id="edit-form"><input type="hidden" id="edit-candidate-id"><div class="form-group"><label for="edit-nombre">Nombre Completo</label><input type="text" id="edit-nombre" class="form-control"></div><div class="form-group"><label for="edit-email">Email</label><input type="email" id="edit-email" class="form-control"></div><div class="form-group"><label for="edit-telefono">Teléfono</label><input type="text" id="edit-telefono" class="form-control"></div><div class="form-actions" style="text-align: right;"><button type="submit" class="btn btn-primary">Guardar Cambios</button></div></form></div>
+      <div class="modal-content"><div class="modal-header"><h2 id="edit-modal-title">Editar Candidato</h2><button id="edit-modal-close" class="modal-close-btn">&times;</button></div><form id="edit-form"><input type="hidden" id="edit-candidate-id"><div class="form-group"><label for="edit-nombre">Nombre Completo</label><input type="text" id="edit-nombre" class="form-control"></div><div class="form-group"><label for="edit-email">Email</label><input type="email" id="edit-email" class="form-control"></div><div class="form-group"><label for="edit-telefono">Teléfono</label><input type="text" id="edit-telefono" class="form-control"></div><div class="form-actions" style="text-align: right;"><button type="submit" class="btn btn-primary">Guardar Cambios</button></div></form></div>
   </div>
   <div id="text-modal-container" class="modal-container hidden">
-    <div class="modal-content" style="max-width: 800px;"><div class="modal-header"><h2 id="text-modal-title"></h2><button id="text-modal-close" class="modal-close-btn">&times;</button></div><div id="text-modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 70vh; overflow-y: auto; background-color: var(--bg-light); padding: 1rem; border-radius: var(--radius-md);"></div></div>
+      <div class="modal-content" style="max-width: 800px;"><div class="modal-header"><h2 id="text-modal-title"></h2><button id="text-modal-close" class="modal-close-btn">&times;</button></div><div id="text-modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 70vh; overflow-y: auto; background-color: var(--bg-light); padding: 1rem; border-radius: var(--radius-md);"></div></div>
   </div>
 
   <script>document.querySelector('.nav-toggle').addEventListener('click', () => {document.querySelector('.nav-menu').classList.toggle('active');});</script>

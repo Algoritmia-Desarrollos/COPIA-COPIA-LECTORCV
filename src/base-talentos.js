@@ -2,22 +2,34 @@
 
 import { supabase } from './supabaseClient.js';
 
-// --- SELECTORES (Sin cambios) ---
+// --- SELECTORES DEL DOM ---
 const folderList = document.getElementById('folder-list');
 const folderTitle = document.getElementById('folder-title');
 const talentosListBody = document.getElementById('talentos-list-body');
 const filtroInput = document.getElementById('filtro-candidatos');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
+
+// Paginación
+const tablePagination = document.getElementById('table-pagination');
+const tablePageIndicator = document.getElementById('table-page-indicator');
+const tablePrevPageBtn = document.getElementById('table-prev-page-btn');
+const tableNextPageBtn = document.getElementById('table-next-page-btn');
+
+// Acciones en Lote
 const bulkActionsContainer = document.getElementById('bulk-actions-container');
 const moveToFolderSelect = document.getElementById('move-to-folder-select');
 const bulkMoveBtn = document.getElementById('bulk-move-btn');
 const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+
+// Formulario de Carpetas
 const showAddFolderFormBtn = document.getElementById('show-add-folder-form-btn');
 const addFolderForm = document.getElementById('add-folder-form');
 const addFolderBtn = document.getElementById('add-folder-btn');
 const cancelAddFolderBtn = document.getElementById('cancel-add-folder-btn');
 const newFolderNameInput = document.getElementById('new-folder-name');
 const parentFolderSelect = document.getElementById('parent-folder-select');
+
+// Modales
 const editModalContainer = document.getElementById('edit-modal-container');
 const editModalCloseBtn = document.getElementById('edit-modal-close');
 const editForm = document.getElementById('edit-form');
@@ -30,16 +42,35 @@ const textModalTitle = document.getElementById('text-modal-title');
 const textModalBody = document.getElementById('text-modal-body');
 const textModalCloseBtn = document.getElementById('text-modal-close');
 
-// --- ESTADO GLOBAL (Sin cambios) ---
-let candidatosCache = [];
+// --- ESTADO GLOBAL CON PAGINACIÓN ---
 let carpetasCache = [];
 let currentFolderId = 'all';
+let currentPage = 1;
+const rowsPerPage = 50; // Puedes ajustar este número para cargar más o menos candidatos por página
+let totalCandidates = 0;
+let currentSearchTerm = '';
 
-// --- INICIALIZACIÓN (Sin cambios) ---
+// --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
     await loadFolders();
     handleFolderClick('all', 'Todos los Candidatos', folderList.querySelector("[data-folder-id='all']"));
-    filtroInput.addEventListener('input', renderTable);
+
+    // Listener de búsqueda con "debounce" para no sobrecargar la BD
+    let searchTimeout;
+    filtroInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            currentPage = 1;
+            currentSearchTerm = filtroInput.value;
+            loadCandidates();
+        }, 500); // Espera 500ms después de que el usuario deja de teclear
+    });
+
+    // Listeners de paginación
+    tablePrevPageBtn.addEventListener('click', () => changePage(-1));
+    tableNextPageBtn.addEventListener('click', () => changePage(1));
+
+    // Otros Listeners
     selectAllCheckbox.addEventListener('change', handleSelectAll);
     bulkMoveBtn.addEventListener('click', handleBulkMove);
     bulkDeleteBtn.addEventListener('click', handleBulkDelete);
@@ -54,7 +85,7 @@ window.addEventListener('DOMContentLoaded', async () => {
 });
 
 
-// --- LÓGICA DE CARPETAS (Sin cambios) ---
+// --- LÓGICA DE CARPETAS ---
 async function loadFolders() {
     const { data, error } = await supabase.from('v2_carpetas').select('*').order('nombre');
     if (error) { console.error("Error al cargar carpetas:", error); return; }
@@ -70,202 +101,103 @@ function renderFoldersUI() {
         const icon = id === 'all' ? 'fa-inbox' : 'fa-folder-open';
         const li = document.createElement('li');
         li.innerHTML = `<div class="folder-item" data-folder-id="${id}"><i class="fa-solid ${icon}"></i> <span class="folder-name">${name}</span></div>`;
-        addDropTarget(li.querySelector('.folder-item'));
         folderList.appendChild(li);
     });
-
-    const folderMap = new Map(carpetasCache.map(f => [f.id, { ...f, children: [] }]));
-    const rootFolders = [];
-
-    for (const folder of folderMap.values()) {
-        if (folder.parent_id && folderMap.has(folder.parent_id)) {
-            folderMap.get(folder.parent_id).children.push(folder);
-        } else {
-            rootFolders.push(folder);
-        }
-    }
-
-    const createFolderElement = (folder, level = 0) => {
+    carpetasCache.forEach(folder => {
         const li = document.createElement('li');
-        li.draggable = true;
-        
-        const hasChildren = folder.children.length > 0;
-        
-        li.innerHTML = `
-            <div class="folder-item" data-folder-id="${folder.id}" style="padding-left: ${1 + level * 1.5}rem;">
-                ${hasChildren ? '<i class="fa-solid fa-chevron-right folder-toggle-icon"></i>' : '<span class="folder-toggle-icon-placeholder"></span>'}
-                <i class="fa-solid fa-folder"></i>
-                <span class="folder-name">${folder.nombre}</span>
-                <div class="folder-item-actions">
-                    <button class="btn-icon" data-action="edit-folder" title="Editar Carpeta"><i class="fa-solid fa-pencil"></i></button>
-                    <button class="btn-icon" data-action="delete-folder" title="Eliminar Carpeta"><i class="fa-solid fa-trash"></i></button>
-                </div>
-            </div>
-        `;
-        
-        const folderItemDiv = li.querySelector('.folder-item');
-        addDropTarget(folderItemDiv);
-
-        if (hasChildren) {
-            const ul = document.createElement('ul');
-            ul.classList.add('nested-folder-list'); // Oculto por defecto por CSS
-            folder.children.forEach(child => ul.appendChild(createFolderElement(child, level + 1)));
-            li.appendChild(ul);
-
-            const toggleIcon = folderItemDiv.querySelector('.folder-toggle-icon');
-            toggleIcon.addEventListener('click', (e) => {
-                e.stopPropagation(); // Evita que se dispare el click de la carpeta
-                li.classList.toggle('expanded');
-            });
-        }
-        
-        return li;
-    };
-
-    rootFolders.forEach(folder => folderList.appendChild(createFolderElement(folder)));
-    folderList.querySelectorAll('li').forEach(li => {
-        li.addEventListener('dragstart', (e) => {
-            e.stopPropagation();
-            e.dataTransfer.setData('text/plain', li.querySelector('.folder-item').dataset.folderId);
-            e.dataTransfer.effectAllowed = 'move';
-        });
+        li.innerHTML = `<div class="folder-item" data-folder-id="${folder.id}"><i class="fa-solid fa-folder"></i> <span class="folder-name">${folder.nombre}</span></div>`;
+        folderList.appendChild(li);
     });
     folderList.querySelectorAll('.folder-item').forEach(item => {
         item.addEventListener('click', (e) => {
-            if (e.target.closest('button')) return;
             const id = e.currentTarget.dataset.folderId;
             const name = e.currentTarget.querySelector('.folder-name').textContent;
             handleFolderClick(id, name, e.currentTarget);
         });
-
-        const editBtn = item.querySelector('[data-action="edit-folder"]');
-        if (editBtn) {
-            editBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const folderId = item.dataset.folderId;
-                handleEditFolder(folderId);
-            });
-        }
-
-        const deleteBtn = item.querySelector('[data-action="delete-folder"]');
-        if (deleteBtn) {
-            deleteBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const folderId = item.dataset.folderId;
-                handleDeleteFolder(folderId);
-            });
-        }
     });
 }
 
 function handleFolderClick(id, name, element) {
     currentFolderId = id;
+    currentPage = 1;
+    currentSearchTerm = '';
+    filtroInput.value = '';
     folderTitle.textContent = name;
     folderList.querySelectorAll('.folder-item.active').forEach(el => el.classList.remove('active'));
     element.classList.add('active');
     loadCandidates();
 }
 
-async function handleEditFolder(folderId) {
-    const folder = carpetasCache.find(f => f.id == folderId);
-    if (!folder) return;
-
-    const newName = prompt('Nuevo nombre de la carpeta:', folder.nombre);
-    if (newName && newName.trim() !== '') {
-        const { error } = await supabase
-            .from('v2_carpetas')
-            .update({ nombre: newName.trim() })
-            .eq('id', folderId);
-
-        if (error) {
-            alert('Error al actualizar la carpeta.');
-            console.error('Error updating folder:', error);
-        } else {
-            alert('Carpeta actualizada con éxito.');
-            await loadFolders();
-        }
-    }
-}
-
-async function handleDeleteFolder(folderId) {
-    const folder = carpetasCache.find(f => f.id == folderId);
-    if (!folder) return;
-
-    if (confirm(`¿Eliminar la carpeta "${folder.nombre}"? Los candidatos dentro no serán eliminados.`)) {
-        const { error } = await supabase
-            .from('v2_carpetas')
-            .delete()
-            .eq('id', folderId);
-
-        if (error) {
-            alert('Error al eliminar la carpeta.');
-            console.error('Error deleting folder:', error);
-        } else {
-            alert('Carpeta eliminada con éxito.');
-            await loadFolders();
-        }
-    }
-}
-
-
-// --- LÓGICA DE CANDIDATOS (ACTUALIZADA) ---
+// --- LÓGICA DE CANDIDATOS CON PAGINACIÓN ---
 async function loadCandidates() {
-    talentosListBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Cargando...</td></tr>';
+    talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
     
-    // ===== CAMBIO: Seleccionamos explícitamente las columnas para no traer el base64 de todos =====
-    let query = supabase.from('v2_candidatos').select(`
-        id, nombre_candidato, email, telefono, nombre_archivo_general, carpeta_id,
-        v2_carpetas (nombre)
-    `);
+    const startIndex = (currentPage - 1) * rowsPerPage;
+    const endIndex = startIndex + rowsPerPage - 1;
+
+    let query = supabase.from('v2_candidatos');
+    let countQuery = supabase.from('v2_candidatos');
 
     if (currentFolderId === 'none') {
         query = query.is('carpeta_id', null);
+        countQuery = countQuery.is('carpeta_id', null);
     } else if (currentFolderId !== 'all') {
         query = query.eq('carpeta_id', currentFolderId);
+        countQuery = countQuery.eq('carpeta_id', currentFolderId);
+    }
+
+    if (currentSearchTerm) {
+        const searchTerm = `%${currentSearchTerm}%`;
+        query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
+        countQuery = countQuery.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
+    }
+
+    const [{ data, error }, { count, error: countError }] = await Promise.all([
+        query.select(`id, nombre_candidato, email, telefono, nombre_archivo_general, v2_carpetas(nombre)`).range(startIndex, endIndex).order('updated_at', { ascending: false }),
+        countQuery.select('*', { count: 'exact', head: true })
+    ]);
+
+    if (error || countError) {
+        console.error("Error al cargar candidatos:", error || countError);
+        talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Error al cargar datos.</td></tr>`;
+        return;
     }
     
-    const { data, error } = await query.order('updated_at', { ascending: false });
-    if (error) { console.error("Error al cargar candidatos:", error); return; }
-    
-    candidatosCache = data;
-    renderTable();
+    totalCandidates = count;
+    renderTable(data);
+    setupPagination();
 }
 
-// --- RENDERIZADO DE TABLA Y ACCIONES (Sin cambios) ---
-function renderTable() {
-    const filtro = filtroInput.value.toLowerCase();
-    const candidatosFiltrados = candidatosCache.filter(c => 
-        (c.nombre_candidato || '').toLowerCase().includes(filtro) ||
-        (c.email || '').toLowerCase().includes(filtro)
-    );
+function changePage(direction) {
+    const totalPages = Math.ceil(totalCandidates / rowsPerPage);
+    const newPage = currentPage + direction;
+    if (newPage > 0 && newPage <= totalPages) {
+        currentPage = newPage;
+        loadCandidates();
+    }
+}
 
+// --- RENDERIZADO Y UI ---
+function renderTable(candidatos) {
     talentosListBody.innerHTML = '';
-    if (candidatosFiltrados.length === 0) {
+    if (!candidatos || candidatos.length === 0) {
         talentosListBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No se encontraron candidatos.</td></tr>';
         return;
     }
-
-    candidatosFiltrados.forEach(candidato => {
+    candidatos.forEach(candidato => {
         const row = document.createElement('tr');
         row.dataset.id = candidato.id;
-        row.draggable = true;
-
-        // Simplificamos la estructura para evitar problemas de layout
         row.innerHTML = `
             <td><input type="checkbox" class="candidate-checkbox" data-id="${candidato.id}"></td>
-            <td>
-                <div class="candidate-name">${candidato.nombre_candidato || 'No extraído'}</div>
-                <div class="candidate-file">${candidato.nombre_archivo_general || ''}</div>
+            <td class="candidate-name-cell">
+                <span class="candidate-name">${candidato.nombre_candidato || 'No extraído'}</span>
+                <span class="candidate-filename">${candidato.nombre_archivo_general || 'No Identificado'}</span>
             </td>
             <td>${candidato.v2_carpetas?.nombre || '<em>Sin Carpeta</em>'}</td>
-            <td>
-                <div>${candidato.email || ''}</div>
-                <div class="text-light">${candidato.telefono || ''}</div>
-            </td>
-            <td class="actions-group">
-                <button class="btn btn-secondary btn-sm" data-action="view-text" title="Ver Texto del CV">Ver Texto</button>
-                <button class="btn btn-primary btn-sm" data-action="view-cv" title="Ver CV Original (PDF)">Ver CV</button>
-                <button class="btn btn-danger btn-sm" data-action="delete" title="Eliminar Candidato"><i class="fa-solid fa-trash"></i></button>
+            <td><div style="white-space: normal;">${candidato.email || ''}</div><div class="text-light">${candidato.telefono || ''}</div></td>
+            <td class="actions-group" style="text-align: right;">
+                <button class="btn btn-secondary btn-sm" data-action="view-text" title="Ver Texto del CV"><i class="fa-solid fa-file-lines"></i></button>
+                <button class="btn btn-primary btn-sm" data-action="view-cv" title="Ver CV Original"><i class="fa-solid fa-download"></i></button>
                 <button class="btn btn-secondary btn-sm" data-action="edit" title="Editar Contacto"><i class="fa-solid fa-pencil"></i></button>
             </td>
         `;
@@ -274,38 +206,29 @@ function renderTable() {
     });
 }
 
-function addTableRowListeners(row) {
-    row.addEventListener('click', (e) => {
-        if (e.target.closest('button') || e.target.closest('a')) return;
-        const checkbox = row.querySelector('.candidate-checkbox');
-        checkbox.checked = !checkbox.checked;
-        const changeEvent = new Event('change');
-        checkbox.dispatchEvent(changeEvent);
-    });
-
-    row.querySelector('.candidate-checkbox').addEventListener('change', updateBulkActionsVisibility);
-
-    row.addEventListener('dragstart', (e) => {
-        const selectedIds = getSelectedIds();
-        const draggedIds = selectedIds.length > 0 && selectedIds.includes(row.dataset.id) ? selectedIds : [row.dataset.id];
-        e.dataTransfer.setData('application/json', JSON.stringify(draggedIds));
-        draggedIds.forEach(id => document.querySelector(`tr[data-id='${id}']`).classList.add('dragging'));
-    });
-
-    row.addEventListener('dragend', () => {
-        document.querySelectorAll('tr.dragging').forEach(r => r.classList.remove('dragging'));
-    });
-
-    // ===== CAMBIO: Pasamos el botón al listener para mostrar estado de carga =====
-    const viewCvBtn = row.querySelector('[data-action="view-cv"]');
-    viewCvBtn.addEventListener('click', () => openCvPdf(row.dataset.id, viewCvBtn));
-
-    row.querySelector('[data-action="view-text"]').addEventListener('click', () => openTextModal(row.dataset.id));
-    row.querySelector('[data-action="edit"]').addEventListener('click', () => openEditModal(row.dataset.id));
-    row.querySelector('[data-action="delete"]').addEventListener('click', () => deleteCandidate(row.dataset.id));
+function setupPagination() {
+    const totalPages = Math.ceil(totalCandidates / rowsPerPage);
+    tablePagination.classList.toggle('hidden', totalPages <= 1);
+    tablePageIndicator.textContent = `Página ${currentPage} de ${totalPages}`;
+    tablePrevPageBtn.disabled = currentPage === 1;
+    tableNextPageBtn.disabled = currentPage >= totalPages;
 }
 
-// --- ACCIONES EN LOTE Y FORMULARIOS (Sin cambios) ---
+function addTableRowListeners(row) {
+    row.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        const checkbox = row.querySelector('.candidate-checkbox');
+        checkbox.checked = !checkbox.checked;
+        updateBulkActionsVisibility();
+    });
+    row.querySelector('.candidate-checkbox').addEventListener('change', updateBulkActionsVisibility);
+    const viewCvBtn = row.querySelector('[data-action="view-cv"]');
+    viewCvBtn.addEventListener('click', (e) => { e.stopPropagation(); openCvPdf(row.dataset.id, viewCvBtn); });
+    row.querySelector('[data-action="view-text"]').addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
+    row.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
+}
+
+// --- ACCIONES EN LOTE Y FORMULARIOS ---
 function getSelectedIds() { return Array.from(talentosListBody.querySelectorAll('.candidate-checkbox:checked')).map(cb => cb.dataset.id); }
 function updateBulkActionsVisibility() { bulkActionsContainer.classList.toggle('hidden', getSelectedIds().length === 0); }
 function handleSelectAll() {
@@ -316,14 +239,15 @@ async function handleBulkMove() {
     const ids = getSelectedIds();
     const targetFolderId = moveToFolderSelect.value === 'none' ? null : parseInt(moveToFolderSelect.value, 10);
     if (ids.length === 0 || moveToFolderSelect.value === "") return;
-    await moveCandidates(ids, targetFolderId);
+    const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: targetFolderId }).in('id', ids);
+    if (error) { alert("Error al mover."); } else { alert("Movidos con éxito."); loadCandidates(); }
 }
 async function handleBulkDelete() {
     const ids = getSelectedIds();
     if (ids.length === 0) return;
-    if (confirm(`¿Eliminar ${ids.length} candidato(s) de forma PERMANENTE? Se conservará el historial de sus postulaciones.`)) {
+    if (confirm(`¿Eliminar ${ids.length} candidato(s) de forma PERMANENTE?`)) {
         const { error } = await supabase.from('v2_candidatos').delete().in('id', ids);
-        if (error) alert("Error al eliminar."); else { alert("Eliminados con éxito."); loadCandidates(); }
+        if (error) { alert("Error al eliminar."); } else { alert("Eliminados con éxito."); loadCandidates(); }
     }
 }
 function toggleAddFolderForm(show) { addFolderForm.classList.toggle('hidden', !show); showAddFolderFormBtn.classList.toggle('hidden', show); }
@@ -331,7 +255,7 @@ async function createNewFolder() {
     const name = newFolderNameInput.value.trim(); if (!name) return;
     const parentId = parentFolderSelect.value ? parseInt(parentFolderSelect.value, 10) : null;
     const { error } = await supabase.from('v2_carpetas').insert({ nombre: name, parent_id: parentId });
-    if (error) alert("Error al crear la carpeta."); else { toggleAddFolderForm(false); await loadFolders(); }
+    if (error) { alert("Error al crear la carpeta."); } else { toggleAddFolderForm(false); await loadFolders(); }
 }
 function populateFolderSelects() {
     parentFolderSelect.innerHTML = '<option value="">Raíz</option>';
@@ -343,144 +267,41 @@ function populateFolderSelects() {
     });
 }
 
-// --- LÓGICA DE DRAG & DROP (CORREGIDA) ---
-function addDropTarget(element) {
-    element.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        element.classList.add('drag-over');
-    });
-    element.addEventListener('dragleave', () => {
-        element.classList.remove('drag-over');
-    });
-    element.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        element.classList.remove('drag-over');
-
-        const candidateIdsJson = e.dataTransfer.getData('application/json');
-        const folderIdText = e.dataTransfer.getData('text/plain');
-        const targetFolderIdRaw = element.dataset.folderId;
-
-        if (candidateIdsJson) {
-            // --- Drop de Candidato(s) ---
-            const ids = JSON.parse(candidateIdsJson);
-            if (targetFolderIdRaw === 'all') return; // No se puede mover a "Todos"
-            
-            const targetFolderId = targetFolderIdRaw === 'none' ? null : parseInt(targetFolderIdRaw, 10);
-            await moveCandidates(ids, targetFolderId);
-
-        } else if (folderIdText) {
-            // --- Drop de Carpeta ---
-            const draggedFolderId = parseInt(folderIdText, 10);
-            if (isNaN(draggedFolderId)) return;
-
-            // No se puede dropear en las carpetas especiales
-            if (targetFolderIdRaw === 'all' || targetFolderIdRaw === 'none') return;
-            
-            const targetParentId = parseInt(targetFolderIdRaw, 10);
-            if (isNaN(targetParentId)) return;
-
-            await moveFolder(draggedFolderId, targetParentId);
-        }
-    });
-}
-
-async function moveCandidates(ids, folderId) {
-    const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: folderId }).in('id', ids);
-    if (error) {
-        alert("Error al mover los candidatos.");
-        console.error("Error moving candidates:", error);
-    } else {
-        // No mostramos alerta para no ser molestos, la UI se actualiza sola
-        await loadCandidates();
-        updateBulkActionsVisibility();
-    }
-}
-
-async function moveFolder(folderId, parentId) {
-    // Evitar que una carpeta sea su propio padre
-    if (folderId === parentId) {
-        return;
-    }
-    
-    // TODO: Prevenir anidamiento circular (ej. mover A dentro de B, y luego B dentro de A)
-    // Por ahora, la validación simple es suficiente.
-
-    const { error } = await supabase
-        .from('v2_carpetas')
-        .update({ parent_id: parentId })
-        .eq('id', folderId);
-
-    if (error) {
-        alert('Error al mover la carpeta.');
-        console.error('Error moving folder:', error);
-    } else {
-        await loadFolders(); // Recargar la lista de carpetas para ver el cambio
-    }
-}
-
-// --- MODALES (ACTUALIZADO) ---
-
-// ===== CAMBIO: La función ahora es async y consulta a Supabase =====
+// --- MODALES ---
 async function openCvPdf(id, buttonElement) {
-    const originalText = buttonElement.innerHTML;
+    const originalHTML = buttonElement.innerHTML;
     buttonElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
     buttonElement.disabled = true;
-
     try {
-        const { data, error } = await supabase
-            .from('v2_candidatos')
-            .select('base64_general, nombre_archivo_general')
-            .eq('id', id)
-            .single();
-
-        if (error) throw error;
-
-        if (data && data.base64_general) {
-            const base64Data = data.base64_general.split(',')[1];
-            const byteCharacters = atob(base64Data);
-            const byteNumbers = new Array(byteCharacters.length);
-            for (let i = 0; i < byteCharacters.length; i++) {
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }
-            const byteArray = new Uint8Array(byteNumbers);
-            const blob = new Blob([byteArray], { type: 'application/pdf' });
-            
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = data.nombre_archivo_general || 'cv.pdf';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-        } else {
-            alert('No se encontró el archivo CV para este candidato.');
-        }
+        const { data, error } = await supabase.from('v2_candidatos').select('base64_general, nombre_archivo_general').eq('id', id).single();
+        if (error || !data) throw error;
+        const link = document.createElement('a');
+        link.href = data.base64_general;
+        link.download = data.nombre_archivo_general || 'cv.pdf';
+        link.click();
     } catch (error) {
-        console.error('Error al obtener el CV:', error);
         alert('No se pudo cargar el CV.');
     } finally {
-        buttonElement.innerHTML = originalText;
+        buttonElement.innerHTML = originalHTML;
         buttonElement.disabled = false;
     }
 }
-
 async function openTextModal(id) {
     const { data, error } = await supabase.from('v2_candidatos').select('nombre_candidato, texto_cv_general').eq('id', id).single();
     if (error || !data) { alert('No se pudo cargar el texto del CV.'); return; }
-    
     textModalTitle.textContent = `Texto de: ${data.nombre_candidato}`;
     textModalBody.textContent = data.texto_cv_general || 'No hay texto extraído.';
     textModalContainer.classList.remove('hidden');
 }
 function closeTextModal() { textModalContainer.classList.add('hidden'); }
 
-function openEditModal(id) {
-    const c = candidatosCache.find(c => c.id == id);
-    if (!c) return;
-    editCandidateIdInput.value = c.id;
-    editNombreInput.value = c.nombre_candidato || '';
-    editEmailInput.value = c.email || '';
-    editTelefonoInput.value = c.telefono || '';
+async function openEditModal(id) {
+    const { data, error } = await supabase.from('v2_candidatos').select('id, nombre_candidato, email, telefono').eq('id', id).single();
+    if (error || !data) { alert('No se pudo cargar el candidato.'); return; }
+    editCandidateIdInput.value = data.id;
+    editNombreInput.value = data.nombre_candidato || '';
+    editEmailInput.value = data.email || '';
+    editTelefonoInput.value = data.telefono || '';
     editModalContainer.classList.remove('hidden');
 }
 function closeEditModal() { editModalContainer.classList.add('hidden'); }
@@ -493,18 +314,5 @@ async function handleEditFormSubmit(e) {
         telefono: editTelefonoInput.value,
     };
     const { error } = await supabase.from('v2_candidatos').update(updatedData).eq('id', id);
-    if (error) alert("Error al actualizar."); else { closeEditModal(); loadCandidates(); }
-}
-
-async function deleteCandidate(id) {
-    if (confirm('¿Eliminar este candidato de forma PERMANENTE? Se conservará el historial de sus postulaciones.')) {
-        const { error } = await supabase.from('v2_candidatos').delete().eq('id', id);
-        if (error) {
-            alert('Error al eliminar el candidato.');
-            console.error('Error deleting candidate:', error);
-        } else {
-            alert('Candidato eliminado con éxito.');
-            loadCandidates();
-        }
-    }
+    if (error) { alert("Error al actualizar."); } else { closeEditModal(); loadCandidates(); }
 }

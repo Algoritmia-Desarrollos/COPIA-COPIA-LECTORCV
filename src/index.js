@@ -1,7 +1,7 @@
 // src/index.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase } from './utils.js'; // Importamos nuestra función de formato
+import { toTitleCase } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const fileInput = document.getElementById('file-input');
@@ -64,7 +64,6 @@ dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.clas
 dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
 dropZone.addEventListener('drop', (e) => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); });
 
-
 // --- LÓGICA DE ENVÍO DEL FORMULARIO ---
 cvForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -75,7 +74,8 @@ cvForm.addEventListener('submit', async (e) => {
 
     try {
         const base64 = await fileToBase64(selectedFile);
-        const textoCV = await extraerTextoDePDF(base64);
+        // Pasamos el objeto 'File' para la extracción de texto, es más robusto
+        const textoCV = await extraerTextoDePDF(selectedFile); 
         const iaData = await extraerDatosConIA(textoCV);
         
         await procesarCandidatoYPostulacion(iaData, base64, textoCV, selectedFile.name, avisoActivo.id);
@@ -96,31 +96,28 @@ cvForm.addEventListener('submit', async (e) => {
 async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArchivo, avisoId) {
     let nombreFormateado = toTitleCase(iaData.nombreCompleto);
     
-    // Si la IA no extrae un nombre, creamos uno único para evitar conflictos.
     if (!nombreFormateado) {
         nombreFormateado = `Candidato No Identificado ${Date.now()}`;
     }
 
-    // Usamos 'upsert' para crear o actualizar el candidato en la base de talentos en un solo paso.
     const { data: candidato, error: upsertError } = await supabase
         .from('v2_candidatos')
         .upsert({
             nombre_candidato: nombreFormateado,
-            email: iaData.email || `no-extraido-${Date.now()}@dominio.com`, // Email único si no se extrae
+            email: iaData.email || `no-extraido-${Date.now()}@dominio.com`,
             telefono: iaData.telefono,
             base64_general: base64,
             texto_cv_general: textoCV,
             nombre_archivo_general: nombreArchivo,
             updated_at: new Date()
         }, {
-            onConflict: 'nombre_candidato' // La clave para evitar duplicados es el nombre
+            onConflict: 'nombre_candidato'
         })
         .select('id')
         .single();
     
     if (upsertError) throw new Error(`Error al procesar candidato: ${upsertError.message}`);
 
-    // Ahora creamos la postulación.
     const { error: postulaError } = await supabase
         .from('v2_postulaciones')
         .insert({
@@ -132,8 +129,9 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
         });
 
     if (postulaError) {
-      if (postulaError.code === '23505') { // Error de 'unique constraint violation'
-        alert('Ya te has postulado a esta búsqueda. Hemos actualizado tu CV con esta nueva versión.');
+      if (postulaError.code === '23505') {
+        // En lugar de una alerta, podemos simplemente registrarlo o no hacer nada.
+        console.warn('El candidato ya se había postulado a este aviso. Su perfil ha sido actualizado.');
       } else {
         throw new Error(`Error al guardar la postulación: ${postulaError.message}`);
       }
@@ -149,9 +147,15 @@ function fileToBase64(file) {
     });
 }
 
-async function extraerTextoDePDF(base64) {
+/**
+ * Función de extracción de texto mejorada.
+ * @param {File} file - El objeto File del CV.
+ * @returns {Promise<string>} El texto extraído.
+ */
+async function extraerTextoDePDF(file) {
     try {
-        const pdf = await pdfjsLib.getDocument(base64).promise;
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
         let textoFinal = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
@@ -160,13 +164,11 @@ async function extraerTextoDePDF(base64) {
         }
         if (textoFinal.trim().length > 50) return textoFinal.trim().replace(/\x00/g, '');
     } catch (error) {
-        console.warn("Extracción nativa fallida, intentando con OCR.", error);
+        console.warn("Extracción nativa de texto fallida, intentando con OCR.", error);
     }
     
     try {
-        const worker = await Tesseract.createWorker('spa');
-        const { data: { text } } = await worker.recognize(base64);
-        await worker.terminate();
+        const { data: { text } } = await Tesseract.recognize(file, 'spa');
         return text || "Texto no legible por OCR";
     } catch (error) {
         console.error("Error de OCR:", error);
@@ -176,7 +178,7 @@ async function extraerTextoDePDF(base64) {
 
 async function extraerDatosConIA(textoCV) {
     const textoCVOptimizado = textoCV.substring(0, 4000);
-    const prompt = `Actúa como un experto en RRHH. Analiza el siguiente CV y extrae nombre completo, email y teléfono. Texto: """${textoCVOptimizado}""" Responde únicamente con un objeto JSON con claves "nombreCompleto", "email" y "telefono". Si no encuentras un dato, usa null.`;
+    const prompt = `Actúa como un experto en RRHH. Analiza el siguiente CV y extrae el nombre completo, el email principal y el teléfono de contacto. Texto del CV: """${textoCVOptimizado}""" Responde únicamente con un objeto JSON con las claves "nombreCompleto", "email" y "telefono". Si no encuentras un dato, usa null.`;
     
     try {
         const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
@@ -184,7 +186,7 @@ async function extraerDatosConIA(textoCV) {
         return JSON.parse(data.message);
     } catch (e) {
         console.error("Error al contactar o parsear la respuesta de la IA:", e);
-        // Devolvemos un objeto vacío para que el flujo continúe
+        // Devolvemos un objeto vacío para que el flujo principal no se detenga.
         return { nombreCompleto: null, email: null, telefono: null };
     }
 }
