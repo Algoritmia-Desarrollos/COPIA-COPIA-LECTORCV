@@ -26,6 +26,7 @@ let postulacionesCache = [];
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
+    // Es crucial inicializar la librería pdf.js para que esté disponible en las funciones.
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -46,7 +47,8 @@ window.addEventListener('DOMContentLoaded', async () => {
             detailsLinkBtn.href = `detalles-aviso.html?id=${avisoId}`;
         }
 
-        await cargarYProcesarPostulantes(avisoId);
+        await cargarPostulantes(avisoId);
+        await analizarPostulantesPendientes();
 
     } catch (error) {
         console.error("Error al cargar datos iniciales:", error);
@@ -54,13 +56,18 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// --- LÓGICA DE CARGA Y PROCESAMIENTO ---
-async function cargarYProcesarPostulantes(avisoId) {
+// --- LÓGICA DE CARGA Y ANÁLISIS ---
+
+async function cargarPostulantes(avisoId) {
     processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cargando postulantes...`;
     
+    // Traemos los datos de la postulación y anidamos la información del candidato.
     const { data, error } = await supabase
         .from('v2_postulaciones')
-        .select(`*, v2_candidatos (id)`)
+        .select(`
+            id, calificacion, resumen, notas, nombre_archivo_especifico, texto_cv_especifico, candidato_id,
+            v2_candidatos (id, nombre_candidato, email, telefono, base64_general, nombre_archivo_general)
+        `)
         .eq('aviso_id', avisoId);
 
     if (error) {
@@ -68,16 +75,18 @@ async function cargarYProcesarPostulantes(avisoId) {
         console.error("Error:", error);
         return;
     }
-
     postulacionesCache = data;
     renderizarTablaCompleta();
-    
+}
+
+async function analizarPostulantesPendientes() {
     const postulacionesNuevas = postulacionesCache.filter(p => p.calificacion === null);
     
     if (postulacionesNuevas.length > 0) {
-        // ... (el resto de la lógica de análisis en el cliente sigue aquí)
         for (const [index, postulacion] of postulacionesNuevas.entries()) {
-            processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Procesando ${index + 1} de ${postulacionesNuevas.length}...`;
+            const nombreMostrado = postulacion.v2_candidatos?.nombre_candidato || 'Nuevo CV';
+            processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Analizando ${index + 1} de ${postulacionesNuevas.length}: <strong>${nombreMostrado}</strong>`;
+            
             try {
                 const textoCV = postulacion.texto_cv_especifico;
                 if (!textoCV) throw new Error("El texto del CV está vacío.");
@@ -94,6 +103,7 @@ async function cargarYProcesarPostulantes(avisoId) {
 
                 await supabase.from('v2_postulaciones').update(updatedPostulacion).eq('id', postulacion.id);
                 actualizarFilaEnVista(postulacion.id, updatedPostulacion);
+
             } catch (err) {
                 await supabase.from('v2_postulaciones').update({ calificacion: -1, resumen: err.message }).eq('id', postulacion.id);
                 actualizarFilaEnVista(postulacion.id, { calificacion: -1, resumen: err.message });
@@ -110,8 +120,21 @@ async function calificarCVConIA(textoCV, aviso) {
     const contextoAviso = `Puesto: ${aviso.titulo}, Descripción: ${aviso.descripcion}, Condiciones Necesarias: ${aviso.condiciones_necesarias.join(', ')}, Condiciones Deseables: ${aviso.condiciones_deseables.join(', ')}`;
 
     const prompt = `
-      Actúa como un Headhunter... (tu prompt completo va aquí)
-      ... Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (número entero), y "justificacion" (string).`;
+      Actúa como un Headhunter y Especialista Senior en Reclutamiento. Tu misión es analizar un CV contra una búsqueda laboral, culminando en una calificación y justificación profesional.
+      **Contexto de la Búsqueda:**
+      ${contextoAviso}
+      **Texto del CV a Analizar:**
+      """${textoCVOptimizado}"""
+      ---
+      **METODOLOGÍA DE EVALUACIÓN (SEGUIR ESTRICTAMENTE):**
+      1.  **Extracción de Datos:** Extrae 'nombreCompleto', 'email', y 'telefono'. Si no están, usa null.
+      2.  **Sistema de Calificación (0 a 100):**
+          A. **Condiciones Indispensables (hasta 50 puntos):** Por CADA condición indispensable que CUMPLE, suma (50 / total de condiciones).
+          B. **Condiciones Deseables (hasta 25 puntos):** Por CADA condición deseable que CUMPLE, suma (25 / total de condiciones).
+          C. **Match General (hasta 25 puntos):** Evalúa la experiencia general y calidad del perfil en relación al puesto.
+      3.  **Justificación:** Redacta un párrafo conciso justificando la nota.
+      **Formato de Salida (JSON estricto):**
+      Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (número entero), y "justificacion" (string).`;
     
     const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
     if (error) throw new Error("No se pudo conectar con la IA.");
@@ -124,7 +147,9 @@ async function calificarCVConIA(textoCV, aviso) {
             calificacion: content.calificacion === undefined ? 0 : content.calificacion,
             justificacion: content.justificacion || "Sin justificación."
         };
-    } catch (e) { throw new Error("La IA devolvió una respuesta inesperada."); }
+    } catch (e) {
+        throw new Error("La IA devolvió una respuesta inesperada.");
+    }
 }
 
 // --- RENDERIZADO Y UI ---
@@ -152,23 +177,25 @@ function actualizarFilaEnVista(postulacionId, datosActualizados) {
 
 function crearFila(postulacion) {
     const row = document.createElement('tr');
+    const candidato = postulacion.v2_candidatos;
     row.dataset.id = postulacion.id;
-    row.dataset.candidateId = postulacion.v2_candidatos?.id;
+    row.dataset.candidateId = candidato?.id;
 
     let calificacionHTML = '<em>Analizando...</em>';
     if(postulacion.calificacion === -1) { calificacionHTML = `<strong style="color: var(--danger-color);">Error</strong>`; }
     else if (typeof postulacion.calificacion === 'number') { calificacionHTML = `<strong>${postulacion.calificacion} / 100</strong>`; }
     
-    const nombre = postulacion.nombre_candidato_snapshot || 'Analizando...';
-    const email = postulacion.email_snapshot || '';
-    const telefono = postulacion.telefono_snapshot || '';
+    // Usamos los datos del candidato de la base de talentos para consistencia.
+    const nombre = candidato?.nombre_candidato || postulacion.nombre_candidato_snapshot || 'Analizando...';
+    const email = candidato?.email || postulacion.email_snapshot || '';
+    const telefono = candidato?.telefono || postulacion.telefono_snapshot || '';
 
     row.innerHTML = `
         <td><input type="checkbox" class="postulacion-checkbox" data-id="${postulacion.id}"></td>
         <td><strong>${nombre}</strong></td>
         <td><span class="text-light">${postulacion.nombre_archivo_especifico || 'N/A'}</span></td>
         <td>
-            <div style="white-space: normal;">${email}</div>
+            <div style="white-space: normal; overflow: visible;">${email}</div>
             <div class="text-light">${telefono}</div>
         </td>
         <td>${calificacionHTML}</td>
@@ -184,7 +211,7 @@ function crearFila(postulacion) {
     `;
     
     row.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button') || e.target.matches('input[type="checkbox"]')) return;
         const checkbox = row.querySelector('.postulacion-checkbox');
         checkbox.checked = !checkbox.checked;
         updateBulkActionsVisibility();
@@ -194,21 +221,25 @@ function crearFila(postulacion) {
     row.querySelector('[data-action="ver-notas"]').addEventListener('click', () => abrirModalNotas(postulacion));
     
     const downloadBtn = row.querySelector('[data-action="ver-cv"]');
-    downloadBtn.addEventListener('click', () => descargarCV(row.dataset.candidateId, downloadBtn));
+    downloadBtn.addEventListener('click', (e) => {
+        e.stopPropagation(); // Evita que el clic en el botón seleccione la fila
+        descargarCV(candidato, downloadBtn);
+    });
 
     return row;
 }
 
 // --- ACCIONES Y FUNCIONALIDADES ---
-async function descargarCV(candidateId, button) {
-    if (!candidateId) return alert('Este candidato no está en la base de datos general.');
+async function descargarCV(candidato, button) {
+    if (!candidato) return alert('Datos del candidato no disponibles.');
     const originalHTML = button.innerHTML;
     button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
     button.disabled = true;
 
     try {
-        const { data, error } = await supabase.from('v2_candidatos').select('base64_general, nombre_archivo_general').eq('id', candidateId).single();
-        if (error || !data) throw new Error('No se encontró el CV.');
+        const { data, error } = await supabase.from('v2_candidatos').select('base64_general, nombre_archivo_general').eq('id', candidato.id).single();
+        if (error || !data) throw new Error('No se encontró el CV en la base de talentos.');
+        
         const link = document.createElement('a');
         link.href = data.base64_general;
         link.download = data.nombre_archivo_general || 'cv.pdf';
@@ -227,14 +258,14 @@ uploadCvBtn.addEventListener('click', () => {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'application/pdf';
-    fileInput.multiple = true; // Permitir carga masiva
+    fileInput.multiple = true;
     fileInput.onchange = async (e) => {
         const files = e.target.files;
         if (files.length === 0) return;
         uploadCvBtn.disabled = true;
-        uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Subiendo ${files.length} CVs...`;
         
-        for (const file of files) {
+        for (const [index, file] of Array.from(files).entries()) {
+            uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Subiendo ${index + 1}/${files.length}`;
             try {
                 const base64 = await fileToBase64(file);
                 const textoCV = await extraerTextoDePDF(file);
@@ -244,7 +275,10 @@ uploadCvBtn.addEventListener('click', () => {
                 alert(`Error al subir el CV ${file.name}: ${error.message}`);
             }
         }
-        await cargarYProcesarPostulantes(avisoActivo.id);
+        
+        await cargarPostulantes(avisoActivo.id);
+        await analizarPostulantesPendientes();
+        
         uploadCvBtn.disabled = false;
         uploadCvBtn.innerHTML = `<i class="fa-solid fa-upload"></i> Cargar CVs`;
     };
@@ -259,7 +293,9 @@ function updateBulkActionsVisibility() {
     const selectedIds = getSelectedPostulacionIds();
     bulkActionsContainer.classList.toggle('hidden', selectedIds.length === 0);
     bulkActionsContainer.classList.toggle('visible', selectedIds.length > 0);
-    bulkActionsCount.textContent = `${selectedIds.length} seleccionados`;
+    if (bulkActionsCount) {
+        bulkActionsCount.textContent = `${selectedIds.length} seleccionados`;
+    }
 }
 
 selectAllCheckbox.addEventListener('change', (e) => {
@@ -283,20 +319,38 @@ bulkDeleteBtn.addEventListener('click', async () => {
 });
 
 // --- MODALES ---
-function abrirModalResumen(postulacion) { /* ... */ }
-function abrirModalNotas(postulacion) { /* ... */ }
+function abrirModalResumen(postulacion) {
+    const nombre = postulacion.v2_candidatos?.nombre_candidato || postulacion.nombre_candidato_snapshot;
+    modalTitle.textContent = `Análisis de ${nombre}`;
+    modalBody.innerHTML = `<h4>Calificación: ${postulacion.calificacion}/100</h4><p>${postulacion.resumen || 'No hay análisis.'}</p>`;
+    modalSaveNotesBtn.classList.add('hidden');
+    abrirModal();
+}
+function abrirModalNotas(postulacion) {
+    const nombre = postulacion.v2_candidatos?.nombre_candidato || postulacion.nombre_candidato_snapshot;
+    modalTitle.textContent = `Notas sobre ${nombre}`;
+    modalBody.innerHTML = `<textarea id="notas-textarea" class="form-control" style="min-height: 150px;" placeholder="Escribe tus notas aquí...">${postulacion.notas || ''}</textarea>`;
+    modalSaveNotesBtn.classList.remove('hidden');
+    modalSaveNotesBtn.onclick = async () => {
+        const nuevasNotas = document.getElementById('notas-textarea').value;
+        await supabase.from('v2_postulaciones').update({ notas: nuevasNotas }).eq('id', postulacion.id);
+        postulacionesCache.find(p => p.id === postulacion.id).notas = nuevasNotas;
+        cerrarModal();
+    };
+    abrirModal();
+}
 function abrirModal() { modalContainer.classList.remove('hidden'); }
 function cerrarModal() { modalContainer.classList.add('hidden'); }
 modalCloseBtn.addEventListener('click', cerrarModal);
 modalCancelBtn.addEventListener('click', cerrarModal);
 modalContainer.addEventListener('click', (e) => { if (e.target === modalContainer) cerrarModal(); });
 
-// --- FUNCIONES AUXILIARES DE PROCESAMIENTO ---
+// --- FUNCIONES AUXILIARES ---
 async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArchivo, avisoId) {
     let nombreFormateado = toTitleCase(iaData.nombreCompleto) || `Candidato No Identificado ${Date.now()}`;
     const { data: candidato, error: upsertError } = await supabase.from('v2_candidatos').upsert({
         nombre_candidato: nombreFormateado,
-        email: iaData.email || 'no-extraido@dominio.com',
+        email: iaData.email || `no-extraido-${Date.now()}@dominio.com`,
         telefono: iaData.telefono,
         base64_general: base64,
         texto_cv_general: textoCV,
@@ -313,7 +367,6 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
     });
     if (postulaError && postulaError.code !== '23505') { throw new Error(`Error: ${postulaError.message}`); }
 }
-
 function fileToBase64(file) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
