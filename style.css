@@ -461,3 +461,48 @@ a:hover { color: var(--primary-hover); }
   .queue-actions { flex-direction: column; gap: 0.5rem; align-items: stretch; }
   .queue-actions .btn { justify-content: center; }
 }
+
+
+/* ===== AJUSTES FINALES PARA RESUMENES Y BASE DE TALENTOS ===== */
+
+/* Estilo para el panel de acciones flotante */
+.sidebar-wrapper.floating {
+  position: absolute;
+  top: 0;
+  left: -280px; /* Posición inicial fuera de la pantalla */
+  width: 250px;
+  z-index: 10;
+  transition: transform 0.3s ease-in-out;
+}
+
+.sidebar-wrapper.floating.visible {
+  transform: translateX(280px); /* Mueve el panel a la vista */
+}
+
+/* Ajustes en la tabla para que ocupe más espacio y se vea mejor */
+.data-table {
+  table-layout: fixed; /* Asegura que las columnas respeten el ancho */
+}
+
+.data-table th, .data-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 1rem 0.75rem; /* Reduce un poco el padding horizontal */
+}
+
+.data-table th:first-child, .data-table td:first-child {
+  padding-left: 1rem; /* Mantiene un buen margen a la izquierda */
+}
+
+.data-table td:last-child, .data-table th:last-child {
+  width: 120px; /* Ancho fijo para la columna de acciones */
+}
+
+.data-table .actions-group {
+  justify-content: flex-end; /* Alinea los botones a la derecha de la celda */
+}
+
+.data-table tbody tr {
+  border-bottom: 1px solid var(--border-color); /* Borde aplicado a la fila */
+}

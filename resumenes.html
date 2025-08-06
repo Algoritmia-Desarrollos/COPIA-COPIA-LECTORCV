@@ -9,6 +9,9 @@
 
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
 </head>
 <body>
 
@@ -25,76 +28,58 @@
   </nav>
 
   <main class="main-container">
-    <div class="panel-container">
-      <div class="dashboard-header">
-        <h1 id="panel-title">Cargando panel de candidatos...</h1>
-        <div class="actions-group">
-            <a id="details-link-btn" class="btn btn-secondary" href="#">
-                <i class="fa-solid fa-circle-info"></i>
-                Ver Detalles del Aviso
-            </a>
-            <a href="lista-avisos.html" class="btn btn-secondary">
-                <i class="fa-solid fa-arrow-left"></i>
-                Ver todas las búsquedas
-            </a>
-        </div>
-      </div>
-
-      <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;">
-        Iniciando...
-      </div>
+    <div style="position: relative;">
       
-      <div class="table-container">
-        <div id="bulk-actions-container" class="hidden" style="margin-bottom: 1rem;">
-            <button id="bulk-delete-btn" class="btn btn-danger">
+      <aside id="bulk-actions-container" class="sidebar-wrapper floating hidden">
+        <div class="panel-container">
+            <h3 id="bulk-actions-title">Acciones</h3>
+            <p id="bulk-actions-count" class="text-light" style="margin-bottom: 1rem;">0 seleccionados</p>
+            <button id="bulk-delete-btn" class="btn btn-danger" style="width: 100%;">
                 <i class="fa-solid fa-trash-can"></i>
-                Eliminar seleccionados de esta búsqueda
+                Eliminar de la Búsqueda
             </button>
         </div>
+      </aside>
 
-        <table id="cv-table" class="data-table">
-          <thead>
-            <tr>
-              <th><input type="checkbox" id="select-all-checkbox"></th>
-              <th>Nombre Candidato</th>
-              <th>Email</th>
-              <th>Teléfono</th>
-              <th>Calificación IA</th>
-              <th>Análisis</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="resumenes-list">
-            <tr>
-              <td colspan="7" style="text-align: center;">
-                <i class="fa-solid fa-spinner fa-spin"></i> Cargando postulantes...
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <div class="panel-container">
+        <div class="dashboard-header">
+          <h1 id="panel-title">Cargando panel...</h1>
+          <div class="actions-group">
+              <button id="upload-cv-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar CVs</button>
+              <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles del Aviso</a>
+              <a href="lista-avisos.html" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Volver</a>
+          </div>
+        </div>
+
+        <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;">Iniciando...</div>
+        
+        <div class="table-container">
+          <table id="cv-table" class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 5%;"><input type="checkbox" id="select-all-checkbox"></th>
+                <th style="width: 20%;">Nombre Candidato</th>
+                <th style="width: 20%;">Archivo</th>
+                <th style="width: 20%;">Contacto</th>
+                <th style="width: 15%;">Calificación IA</th>
+                <th style="width: 10%;">Análisis</th>
+                <th style="width: 10%;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="resumenes-list"></tbody>
+          </table>
+        </div>
       </div>
+
     </div>
   </main>
 
   <div id="modal-container" class="modal-container hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h2 id="modal-title"></h2>
-        <button id="modal-close" class="modal-close-btn">&times;</button>
-      </div>
-      <div id="modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 60vh; overflow-y: auto;"></div>
-      <div class="modal-footer" style="text-align: right; margin-top: 1rem;">
-        <button id="modal-save-notes" class="btn btn-primary hidden">Guardar Notas</button>
-        <button id="modal-cancel" class="btn btn-secondary">Cerrar</button>
-      </div>
-    </div>
+    <div class="modal-content"><div class="modal-header"><h2 id="modal-title"></h2><button id="modal-close" class="modal-close-btn">&times;</button></div><div id="modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 60vh; overflow-y: auto;"></div><div class="modal-footer" style="text-align: right; margin-top: 1rem;"><button id="modal-save-notes" class="btn btn-primary hidden">Guardar Notas</button><button id="modal-cancel" class="btn btn-secondary">Cerrar</button></div></div>
   </div>
 
-  <script>
-    document.querySelector('.nav-toggle').addEventListener('click', () => {
-      document.querySelector('.nav-menu').classList.toggle('active');
-    });
-  </script>
+  <script>document.querySelector('.nav-toggle').addEventListener('click', () => {document.querySelector('.nav-menu').classList.toggle('active');});</script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <script type="module" src="src/resumenes.js"></script>
 </body>
 </html>
