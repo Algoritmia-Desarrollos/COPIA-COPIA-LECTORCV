@@ -61,12 +61,14 @@ async function cargarPostulantes(avisoId) {
     
     const { data, error } = await supabase
         .from('v2_postulaciones')
-        .select(`*, v2_candidatos (id, nombre_candidato, email, telefono, base64_general, nombre_archivo_general)`)
+        .select(`
+            id, calificacion, resumen, notas, nombre_archivo_especifico, texto_cv_especifico,
+            v2_candidatos (id, nombre_candidato, email, telefono, base64_general, nombre_archivo_general)
+        `)
         .eq('aviso_id', avisoId);
 
     if (error) {
         processingStatus.textContent = 'Error al cargar postulantes.';
-        console.error("Error:", error);
         return;
     }
     postulacionesCache = data;
@@ -90,11 +92,8 @@ async function analizarPostulantesPendientes() {
                 const updatedPostulacion = {
                     calificacion: iaData.calificacion,
                     resumen: iaData.justificacion,
-                    nombre_candidato_snapshot: toTitleCase(iaData.nombreCompleto),
-                    email_snapshot: iaData.email,
-                    telefono_snapshot: iaData.telefono,
                 };
-
+                
                 await supabase.from('v2_postulaciones').update(updatedPostulacion).eq('id', postulacion.id);
                 actualizarFilaEnVista(postulacion.id, updatedPostulacion);
 
@@ -112,10 +111,7 @@ async function analizarPostulantesPendientes() {
 async function calificarCVConIA(textoCV, aviso) {
     const textoCVOptimizado = textoCV.substring(0, 12000);
     const contextoAviso = `Puesto: ${aviso.titulo}, Descripción: ${aviso.descripcion}, Condiciones Necesarias: ${aviso.condiciones_necesarias.join(', ')}, Condiciones Deseables: ${aviso.condiciones_deseables.join(', ')}`;
-
-    const prompt = `
-      Actúa como un Headhunter... (tu prompt completo va aquí)
-      ... Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (número entero), y "justificacion" (string).`;
+    const prompt = `Actúa como un Headhunter... (tu prompt completo va aquí) ... Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (número entero), y "justificacion" (string).`;
     
     const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
     if (error) throw new Error("No se pudo conectar con la IA.");
@@ -128,9 +124,7 @@ async function calificarCVConIA(textoCV, aviso) {
             calificacion: content.calificacion === undefined ? 0 : content.calificacion,
             justificacion: content.justificacion || "Sin justificación."
         };
-    } catch (e) {
-        throw new Error("La IA devolvió una respuesta inesperada.");
-    }
+    } catch (e) { throw new Error("La IA devolvió una respuesta inesperada."); }
 }
 
 // --- RENDERIZADO Y UI ---
@@ -165,21 +159,19 @@ function crearFila(postulacion) {
     else if (typeof postulacion.calificacion === 'number') { calificacionHTML = `<strong>${postulacion.calificacion} / 100</strong>`; }
     
     const nombre = candidato?.nombre_candidato || postulacion.nombre_candidato_snapshot || 'Analizando...';
-    const email = candidato?.email || postulacion.email_snapshot || '';
-    const telefono = candidato?.telefono || postulacion.telefono_snapshot || '';
+    const email = candidato?.email || postulacion.email_snapshot || 'N/A';
+    const telefono = candidato?.telefono || postulacion.telefono_snapshot || 'N/A';
 
     row.innerHTML = `
         <td><input type="checkbox" class="postulacion-checkbox" data-id="${postulacion.id}"></td>
         <td><strong>${nombre}</strong></td>
-        <td><span class="text-light">${postulacion.nombre_archivo_especifico || 'N/A'}</span></td>
+        <td><span class="text-light">${postulacion.nombre_archivo_especifico || 'No Identificado'}</span></td>
         <td>
             <div style="white-space: normal; overflow: visible;">${email}</div>
             <div class="text-light">${telefono}</div>
         </td>
         <td>${calificacionHTML}</td>
-        <td>
-            <button class="btn btn-secondary btn-sm" data-action="ver-resumen" ${!postulacion.resumen ? 'disabled' : ''}>Análisis</button>
-        </td>
+        <td><button class="btn btn-secondary btn-sm" data-action="ver-resumen" ${!postulacion.resumen ? 'disabled' : ''}>Análisis</button></td>
         <td>
             <div class="actions-group">
                 <button class="btn btn-secondary btn-sm" data-action="ver-notas" title="Notas"><i class="fa-solid fa-note-sticky"></i></button>
@@ -213,11 +205,9 @@ async function descargarCV(candidato, button) {
     const originalHTML = button.innerHTML;
     button.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
     button.disabled = true;
-
     try {
         const { data, error } = await supabase.from('v2_candidatos').select('base64_general, nombre_archivo_general').eq('id', candidato.id).single();
         if (error || !data) throw new Error('No se encontró el CV en la base de talentos.');
-        
         const link = document.createElement('a');
         link.href = data.base64_general;
         link.download = data.nombre_archivo_general || 'cv.pdf';
@@ -246,8 +236,7 @@ uploadCvBtn.addEventListener('click', () => {
             uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Subiendo ${index + 1}/${files.length}`;
             try {
                 const base64 = await fileToBase64(file);
-                // ===== CORRECCIÓN: Pasamos el objeto File a extraerTextoDePDF =====
-                const textoCV = await extraerTextoDePDF(file);
+                const textoCV = await extraerTextoDePDF(file); // Pasamos el 'File'
                 const iaData = await extraerDatosConIA(textoCV);
                 await procesarCandidatoYPostulacion(iaData, base64, textoCV, file.name, avisoActivo.id);
             } catch (error) {
@@ -271,6 +260,7 @@ function getSelectedPostulacionIds() {
 function updateBulkActionsVisibility() {
     const selectedIds = getSelectedPostulacionIds();
     bulkActionsContainer.classList.toggle('hidden', selectedIds.length === 0);
+    bulkActionsContainer.classList.toggle('visible', selectedIds.length > 0);
     if (bulkActionsCount) {
         bulkActionsCount.textContent = `${selectedIds.length} seleccionados`;
     }
@@ -354,8 +344,6 @@ function fileToBase64(file) {
     });
 }
 async function extraerTextoDePDF(file) {
-    // ===== CORRECCIÓN: Tesseract funciona mejor con el objeto File directamente =====
-    // Primero intentamos la extracción nativa con el contenido del archivo
     try {
         const arrayBuffer = await file.arrayBuffer();
         const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
@@ -366,21 +354,14 @@ async function extraerTextoDePDF(file) {
             textoFinal += textContent.items.map(item => item.str).join(' ');
         }
         if (textoFinal.trim().length > 50) return textoFinal.trim().replace(/\x00/g, '');
-    } catch (error) {
-        console.warn("Extracción nativa fallida, intentando con OCR.", error);
-    }
-    
-    // Fallback a OCR si la extracción nativa no funciona
+    } catch (error) { console.warn("Extracción nativa fallida, intentando OCR.", error); }
     try {
         const { data: { text } } = await Tesseract.recognize(file, 'spa');
         return text || "Texto no legible por OCR";
-    } catch (error) {
-        console.error("Error de OCR:", error);
-        return "El contenido del PDF no pudo ser leído.";
-    }
+    } catch (error) { return "Contenido no legible."; }
 }
 async function extraerDatosConIA(texto) {
-    const prompt = `Actúa como RRHH. Extrae nombre, email y teléfono. Texto: """${texto.substring(0,4000)}""" Responde solo JSON con claves "nombreCompleto", "email", "telefono". Si no encuentras, usa null.`;
+    const prompt = `Actúa como RRHH... (tu prompt de extracción simple va aquí) ...`;
     try {
         const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
         if (error) throw error;

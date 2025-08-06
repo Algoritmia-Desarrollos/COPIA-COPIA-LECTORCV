@@ -51,7 +51,7 @@ a:hover { color: var(--primary-hover); }
 
 /* --- 3. LAYOUT Y CONTENEDORES --- */
 .main-container {
-  max-width: 1400px;
+  max-width: 1600px; /* Aumentado para más espacio */
   margin: 0 auto;
   padding: 2rem 1.5rem;
 }
@@ -223,15 +223,14 @@ a:hover { color: var(--primary-hover); }
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  table-layout: fixed; /* Clave para un layout estable */
+  table-layout: auto; /* Cambiado a auto para más flexibilidad */
 }
 .data-table th, .data-table td {
   padding: 1rem;
   border-bottom: none; /* Se quita el borde de la celda */
   vertical-align: middle; /* Se centra verticalmente */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal; /* Permite que el texto se ajuste */
+  word-break: break-word; /* Evita que palabras largas rompan el layout */
 }
 
 /* No hay efecto de hover para expandir celdas */
@@ -379,6 +378,35 @@ a:hover { color: var(--primary-hover); }
     color: var(--text-dark) !important;
 }
 
+/* --- Estilos para carpetas desplegables --- */
+.nested-folder-list {
+    display: none; /* Ocultar sub-carpetas por defecto */
+    padding-left: 0;
+    list-style: none;
+}
+
+li.expanded > .nested-folder-list {
+    display: block; /* Mostrar sub-carpetas cuando el padre está expandido */
+}
+
+.folder-toggle-icon {
+    cursor: pointer;
+    transition: transform 0.2s ease;
+    width: 1em; /* Alineación */
+    text-align: center;
+    margin-right: 0.25rem;
+}
+
+.folder-toggle-icon-placeholder {
+    display: inline-block;
+    width: 1em;
+    margin-right: 0.25rem;
+}
+
+li.expanded > .folder-item .folder-toggle-icon {
+    transform: rotate(90deg);
+}
+
 .folder-item-actions {
   display: none;
   margin-left: auto;
@@ -487,7 +515,8 @@ a:hover { color: var(--primary-hover); }
 }
 
 .data-table td:last-child, .data-table th:last-child {
-  width: 120px; /* Ancho fijo para la columna de acciones */
+  width: auto; /* Quitado el ancho fijo */
+  min-width: 140px; /* Asegura un ancho mínimo para los botones */
 }
 
 .data-table .actions-group {

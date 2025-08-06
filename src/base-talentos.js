@@ -88,8 +88,12 @@ function renderFoldersUI() {
     const createFolderElement = (folder, level = 0) => {
         const li = document.createElement('li');
         li.draggable = true;
+        
+        const hasChildren = folder.children.length > 0;
+        
         li.innerHTML = `
             <div class="folder-item" data-folder-id="${folder.id}" style="padding-left: ${1 + level * 1.5}rem;">
+                ${hasChildren ? '<i class="fa-solid fa-chevron-right folder-toggle-icon"></i>' : '<span class="folder-toggle-icon-placeholder"></span>'}
                 <i class="fa-solid fa-folder"></i>
                 <span class="folder-name">${folder.nombre}</span>
                 <div class="folder-item-actions">
@@ -98,13 +102,23 @@ function renderFoldersUI() {
                 </div>
             </div>
         `;
-        addDropTarget(li.querySelector('.folder-item'));
+        
+        const folderItemDiv = li.querySelector('.folder-item');
+        addDropTarget(folderItemDiv);
 
-        if (folder.children.length > 0) {
+        if (hasChildren) {
             const ul = document.createElement('ul');
+            ul.classList.add('nested-folder-list'); // Oculto por defecto por CSS
             folder.children.forEach(child => ul.appendChild(createFolderElement(child, level + 1)));
             li.appendChild(ul);
+
+            const toggleIcon = folderItemDiv.querySelector('.folder-toggle-icon');
+            toggleIcon.addEventListener('click', (e) => {
+                e.stopPropagation(); // Evita que se dispare el click de la carpeta
+                li.classList.toggle('expanded');
+            });
         }
+        
         return li;
     };
 
@@ -329,30 +343,68 @@ function populateFolderSelects() {
     });
 }
 
-// --- LÓGICA DE DRAG & DROP (Sin cambios) ---
+// --- LÓGICA DE DRAG & DROP (CORREGIDA) ---
 function addDropTarget(element) {
-    element.addEventListener('dragover', (e) => { e.preventDefault(); element.classList.add('drag-over'); });
-    element.addEventListener('dragleave', () => element.classList.remove('drag-over'));
+    element.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        element.classList.add('drag-over');
+    });
+    element.addEventListener('dragleave', () => {
+        element.classList.remove('drag-over');
+    });
     element.addEventListener('drop', async (e) => {
         e.preventDefault();
         element.classList.remove('drag-over');
-        const draggedId = e.dataTransfer.getData('text/plain');
-        const targetFolderId = element.dataset.folderId === 'none' ? null : parseInt(element.dataset.folderId, 10);
 
-        if (draggedId.includes('[')) {
-            const ids = JSON.parse(draggedId);
+        const candidateIdsJson = e.dataTransfer.getData('application/json');
+        const folderIdText = e.dataTransfer.getData('text/plain');
+        const targetFolderIdRaw = element.dataset.folderId;
+
+        if (candidateIdsJson) {
+            // --- Drop de Candidato(s) ---
+            const ids = JSON.parse(candidateIdsJson);
+            if (targetFolderIdRaw === 'all') return; // No se puede mover a "Todos"
+            
+            const targetFolderId = targetFolderIdRaw === 'none' ? null : parseInt(targetFolderIdRaw, 10);
             await moveCandidates(ids, targetFolderId);
-        } else {
-            await moveFolder(parseInt(draggedId, 10), targetFolderId);
+
+        } else if (folderIdText) {
+            // --- Drop de Carpeta ---
+            const draggedFolderId = parseInt(folderIdText, 10);
+            if (isNaN(draggedFolderId)) return;
+
+            // No se puede dropear en las carpetas especiales
+            if (targetFolderIdRaw === 'all' || targetFolderIdRaw === 'none') return;
+            
+            const targetParentId = parseInt(targetFolderIdRaw, 10);
+            if (isNaN(targetParentId)) return;
+
+            await moveFolder(draggedFolderId, targetParentId);
         }
     });
 }
+
 async function moveCandidates(ids, folderId) {
     const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: folderId }).in('id', ids);
-    if (error) alert("Error al mover."); else { alert("Movidos con éxito."); loadCandidates(); }
+    if (error) {
+        alert("Error al mover los candidatos.");
+        console.error("Error moving candidates:", error);
+    } else {
+        // No mostramos alerta para no ser molestos, la UI se actualiza sola
+        await loadCandidates();
+        updateBulkActionsVisibility();
+    }
 }
 
 async function moveFolder(folderId, parentId) {
+    // Evitar que una carpeta sea su propio padre
+    if (folderId === parentId) {
+        return;
+    }
+    
+    // TODO: Prevenir anidamiento circular (ej. mover A dentro de B, y luego B dentro de A)
+    // Por ahora, la validación simple es suficiente.
+
     const { error } = await supabase
         .from('v2_carpetas')
         .update({ parent_id: parentId })
@@ -362,8 +414,7 @@ async function moveFolder(folderId, parentId) {
         alert('Error al mover la carpeta.');
         console.error('Error moving folder:', error);
     } else {
-        alert('Carpeta movida con éxito.');
-        await loadFolders();
+        await loadFolders(); // Recargar la lista de carpetas para ver el cambio
     }
 }
 

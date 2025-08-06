@@ -16,28 +16,37 @@
                 <img src="assets/este (3).jpg" alt="Logo de la Empresa" style="max-width: 200px;">
             </div>
             
-            <h1 style="text-align: center; font-size: 1.75rem; color: var(--text-dark);">Acceso al Panel</h1>
-            <p style="text-align: center; color: var(--text-light); margin-bottom: 2rem;">
-                Ingresa tu email para recibir un link de acceso seguro.
-            </p>
+            <h1 id="form-title" style="text-align: center; font-size: 1.75rem; color: var(--text-dark);">Acceso al Panel</h1>
 
-            <div id="login-view">
-                <form id="login-form">
+            <div id="auth-view">
+                <form id="auth-form">
                     <div class="form-group">
                         <label for="email-input">Correo Electrónico</label>
                         <input type="email" id="email-input" class="form-control" placeholder="tu@email.com" required>
                     </div>
-                    <button type="submit" id="login-btn" class="btn btn-primary" style="width: 100%;">
-                        <i class="fa-solid fa-paper-plane"></i>
-                        <span>Enviar Link Mágico</span>
+                    <div class="form-group">
+                        <label for="password-input">Contraseña</label>
+                        <input type="password" id="password-input" class="form-control" placeholder="••••••••" required>
+                    </div>
+                    <button type="submit" id="auth-btn" class="btn btn-primary" style="width: 100%;">
+                        <i class="fa-solid fa-right-to-bracket"></i>
+                        <span>Iniciar Sesión</span>
                     </button>
                 </form>
+                <p id="error-message" class="hidden" style="color: var(--danger-color); text-align: center; margin-top: 1rem;"></p>
+                
+                <div style="text-align: center; margin-top: 1.5rem;">
+                    <p class="text-light">
+                        <span id="toggle-text">¿No tienes una cuenta?</span>
+                        <a href="#" id="toggle-auth-mode-btn">Regístrate</a>
+                    </p>
+                </div>
             </div>
 
             <div id="success-view" class="hidden" style="text-align: center; padding: 1rem;">
                 <i class="fa-solid fa-circle-check" style="font-size: 3rem; color: #16a34a; margin-bottom: 1rem;"></i>
                 <h2 style="color: var(--text-dark);">¡Revisa tu correo!</h2>
-                <p style="color: var(--text-main);">Te hemos enviado un link para que puedas acceder de forma segura.</p>
+                <p style="color: var(--text-main);">Te hemos enviado un link de confirmación para activar tu cuenta.</p>
             </div>
         </div>
     </main>
