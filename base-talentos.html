@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Base de Talentos - Fagaz CV</title>
+
+    <script type="module" src="src/auth-guard.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="lista-avisos.html" class="nav-logo">Fagaz CV</a>
+      <ul class="nav-menu">
+        <li class="nav-link"><a href="lista-avisos.html">Mis Búsquedas</a></li>
+        <li class="nav-link"><a href="base-talentos.html" class="active">Base de datos</a></li>
+        <li class="nav-link"><a href="carga-masiva.html">Carga Masiva</a></li>
+      </ul>
+      <button class="nav-toggle"><i class="fa-solid fa-bars"></i></button>
+    </div>
+  </nav>
+
+  <main class="main-container">
+    <div class="db-layout">
+      <aside class="sidebar-wrapper">
+        <div class="panel-container">
+          <h3>Carpetas</h3>
+          <ul id="folder-list" class="folder-list">
+            <li>Cargando carpetas...</li>
+          </ul>
+          <div class="folder-actions">
+              <button id="show-add-folder-form-btn" class="btn btn-primary" style="width: 100%;">Crear Carpeta</button>
+              <div id="add-folder-form" class="hidden" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+                  <div class="form-group">
+                      <label for="new-folder-name">Nombre de la carpeta</label>
+                      <input type="text" id="new-folder-name" placeholder="Ej: Desarrolladores">
+                  </div>
+                  <div class="form-group">
+                      <label for="parent-folder-select">Ubicación (opcional)</label>
+                      <select id="parent-folder-select">
+                          <option value="">Raíz (sin carpeta padre)</option>
+                      </select>
+                  </div>
+                  <div class="form-actions">
+                      <button id="cancel-add-folder-btn" class="btn btn-secondary">Cancelar</button>
+                      <button id="add-folder-btn" class="btn btn-primary">Guardar</button>
+                  </div>
+              </div>
+          </div>
+        </div>
+        <div class="panel-container">
+            <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar en la vista actual...">
+        </div>
+      </aside>
+
+      <div class="db-main-content">
+        <div class="panel-container">
+            <div class="dashboard-header">
+                <h1 id="folder-title">Todos los Candidatos</h1>
+                <a id="upload-to-folder-btn" href="carga-masiva.html" class="btn btn-primary">
+                    <i class="fa-solid fa-upload"></i>
+                    Cargar a esta Carpeta
+                </a>
+            </div>
+
+            <div id="bulk-actions-container" class="bulk-actions-panel hidden">
+                <select id="move-to-folder-select" class="form-control"></select>
+                <button id="bulk-move-btn" class="btn btn-secondary">Mover</button>
+                <button id="bulk-delete-btn" class="btn btn-danger">Eliminar</button>
+            </div>
+            
+            <div class="table-container">
+              <table id="talentos-table" class="data-table">
+                <thead>
+                  <tr>
+                    <th><input type="checkbox" id="select-all-checkbox"></th>
+                    <th>Nombre Candidato</th>
+                    <th>Email / Teléfono</th>
+                    <th>Carpeta</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="talentos-list-body">
+                  <tr><td colspan="5" style="text-align: center;">Cargando candidatos...</td></tr>
+                </tbody>
+              </table>
+            </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  
+  <script>
+    document.querySelector('.nav-toggle').addEventListener('click', () => {
+      document.querySelector('.nav-menu').classList.toggle('active');
+    });
+  </script>
+  <script type="module" src="src/base-talentos.js"></script>
+</body>
+</html>

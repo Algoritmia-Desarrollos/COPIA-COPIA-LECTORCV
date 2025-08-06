@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear Nuevo Aviso Laboral - Fagaz CV</title>
+
+    <script type="module" src="src/auth-guard.js"></script>
+  
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="lista-avisos.html" class="nav-logo">Fagaz CV</a>
+      <ul class="nav-menu">
+        <li class="nav-link"><a href="lista-avisos.html" class="active">Mis Búsquedas</a></li>
+        <li class="nav-link"><a href="base-talentos.html">Base de datos</a></li>
+        <li class="nav-link"><a href="carga-masiva.html">Carga Masiva</a></li>
+      </ul>
+      <button class="nav-toggle"><i class="fa-solid fa-bars"></i></button>
+    </div>
+  </nav>
+
+  <main class="main-container">
+    <div class="panel-container" style="max-width: 800px; margin: auto;">
+      <div class="dashboard-header">
+        <h1>Crear Búsqueda Laboral</h1>
+        <a href="lista-avisos.html" class="btn btn-secondary">
+          <i class="fa-solid fa-arrow-left"></i>
+          Volver a Mis Búsquedas
+        </a>
+      </div>
+      
+      <form id="aviso-form">
+        <div class="form-section">
+          <div class="form-group">
+            <label for="puesto-trabajo">Puesto de Trabajo</label>
+            <button type="button" id="generar-descripcion-btn" class="btn btn-secondary" style="float: right; padding: 0.3rem 0.6rem; font-size: 0.8rem;">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+                Generar con IA
+            </button>
+            <input type="text" id="puesto-trabajo" placeholder="Ej: Desarrollador Full Stack" required>
+          </div>
+          <div class="form-group">
+            <label for="descripcion-trabajo">Descripción del Puesto</label>
+            <textarea id="descripcion-trabajo" rows="5" placeholder="Detalle aquí las principales tareas y responsabilidades del puesto." required></textarea>
+          </div>
+          <div class="form-row" style="display: flex; gap: 1rem;">
+            <div class="form-group" style="flex: 1;">
+              <label for="max-cv">Máx. cantidad de CVs</label>
+              <select id="max-cv">
+                <option value="100">100</option>
+                <option value="200">200</option>
+                <option value="500" selected>500</option>
+                <option value="1000">1000</option>
+              </select>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label for="valido-hasta">Válido hasta</label>
+              <input type="date" id="valido-hasta" required>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+          <h2>Condiciones de análisis para la IA</h2>
+          <div class="form-group">
+            <label for="necesaria-input">Condiciones necesarias (Excluyentes)</label>
+            <div class="condition-input-group">
+              <input type="text" id="necesaria-input" placeholder="Ej: 3 años de experiencia en React">
+              <button type="button" class="add-btn" id="add-necesaria-btn">+</button>
+            </div>
+            <div id="necesarias-list" class="conditions-list" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+          </div>
+          <div class="form-group">
+            <label for="deseable-input">Condiciones deseables (Suman puntos)</label>
+            <div class="condition-input-group">
+              <input type="text" id="deseable-input" placeholder="Ej: Conocimientos de TypeScript">
+              <button type="button" class="add-btn" id="add-deseable-btn">+</button>
+            </div>
+            <div id="deseables-list" class="conditions-list" style="margin-top: 1rem; display: flex; flex-wrap: wrap; gap: 0.5rem;"></div>
+          </div>
+        </div>
+
+        <div class="form-actions" style="margin-top: 2rem; text-align: right;">
+          <button type="submit" class="btn btn-primary">
+            <i class="fa-solid fa-paper-plane"></i>
+            Guardar y Publicar Aviso
+          </button>
+        </div>
+      </form>
+
+      <div id="success-message" class="hidden" style="margin-top: 1rem; padding: 1rem; background-color: #dcfce7; color: #166534; border-radius: var(--radius-md);">
+        ✅ ¡Aviso publicado con éxito! Redirigiendo...
+      </div>
+      <div id="error-message" class="hidden" style="margin-top: 1rem; padding: 1rem; background-color: #fee2e2; color: #991b1b; border-radius: var(--radius-md);">
+        </div>
+    </div>
+  </main>
+  
+  <script>
+    // Script simple para el menú hamburguesa en móvil
+    document.querySelector('.nav-toggle').addEventListener('click', () => {
+      document.querySelector('.nav-menu').classList.toggle('active');
+    });
+  </script>
+  <script type="module" src="src/crear-aviso.js"></script>
+</body>
+</html>

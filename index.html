@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Postulación - Fagaz CV</title>
+  
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+</head>
+<body class="public-page-body">
+
+  <main class="public-page-wrapper">
+    <div class="panel-container" style="max-width: 600px; margin: auto;">
+      
+      <div style="text-align: center; margin-bottom: 2rem;">
+        <img src="assets/este (3).jpg" alt="Logo de la Empresa" style="max-width: 200px;">
+      </div>
+
+      <div id="form-view">
+        <div class="public-aviso-header" style="text-align: center; margin-bottom: 1rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);">
+          <h1 id="aviso-titulo">Cargando Búsqueda...</h1>
+        </div>
+        
+        <p style="text-align: center; color: var(--text-light); margin-top: 0.5rem; margin-bottom: 2rem; font-size: 1rem;">
+          Tu perfil será considerado para esta y futuras búsquedas laborales que coincidan con tu experiencia.
+        </p>
+
+        <form id="cv-form">
+          <label for="file-input" id="drop-zone" class="drop-zone">
+            <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
+            <span id="file-label-text" class="upload-text">Arrastra y suelta tu CV aquí o haz clic para seleccionar</span>
+            <span class="upload-hint">Solo archivos PDF, tamaño máximo: 5MB</span>
+          </label>
+          <input type="file" id="file-input" accept="application/pdf" hidden>
+
+          <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem;" disabled>
+            <i class="fa-solid fa-paper-plane"></i>
+            Enviar Postulación
+          </button>
+        </form>
+      </div>
+
+      <div id="success-view" class="hidden" style="text-align: center; padding: 2rem;">
+        <i class="fa-solid fa-circle-check" style="font-size: 4rem; color: #16a34a; margin-bottom: 1rem;"></i>
+        <h2 style="color: var(--text-dark); font-size: 1.75rem;">¡Gracias por postularte!</h2>
+        <p style="font-size: 1.125rem; color: var(--text-main);">Hemos recibido tu CV. Si tu perfil se adapta a los requisitos, nos pondremos en contacto contigo.</p>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
+  
+  <script type="module" src="src/index.js"></script>
+
+</body>
+</html>

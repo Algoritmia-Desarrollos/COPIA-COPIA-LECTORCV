@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detalles del Aviso - Fagaz CV</title>
+
+    <script type="module" src="src/auth-guard.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="lista-avisos.html" class="nav-logo">Fagaz CV</a>
+      <ul class="nav-menu">
+        <li class="nav-link"><a href="lista-avisos.html" class="active">Mis Búsquedas</a></li>
+        <li class="nav-link"><a href="base-talentos.html">Base de datos</a></li>
+        <li class="nav-link"><a href="carga-masiva.html">Carga Masiva</a></li>
+      </ul>
+      <button class="nav-toggle"><i class="fa-solid fa-bars"></i></button>
+    </div>
+  </nav>
+
+  <main class="main-container">
+    <div class="details-container" style="max-width: 1200px; margin: auto;">
+      <div class="dashboard-header">
+        <h1 id="aviso-titulo">Cargando detalles...</h1>
+        <div class="actions-group">
+          <button id="delete-aviso-btn" class="btn btn-danger"><i class="fa-solid fa-trash"></i> Eliminar Aviso</button>
+          <button id="edit-aviso-btn" class="btn btn-primary"><i class="fa-solid fa-pencil"></i> Editar Aviso</button>
+          <a href="lista-avisos.html" class="btn btn-secondary">
+            <i class="fa-solid fa-arrow-left"></i> Volver
+          </a>
+        </div>
+      </div>
+
+      <div class="details-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; align-items: flex-start;">
+        
+        <div class="details-main">
+          <div class="panel-container">
+            <div class="details-section">
+              <h3>Descripción del Puesto</h3>
+              <p id="aviso-descripcion" style="white-space: pre-wrap;">Cargando...</p>
+            </div>
+            <div class="details-section" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+              <h3>Condiciones Necesarias (Excluyentes)</h3>
+              <ul id="necesarias-list" class="lista-condiciones"><li>Cargando...</li></ul>
+            </div>
+            <div class="details-section" style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+              <h3>Condiciones Deseables (Suman Puntos)</h3>
+              <ul id="deseables-list" class="lista-condiciones"><li>Cargando...</li></ul>
+            </div>
+          </div>
+        </div>
+
+        <aside class="details-sidebar" style="position: sticky; top: 2rem;">
+          <div class="panel-container share-section">
+            <h3>Link para Postulantes</h3>
+            <p class="text-light" style="font-size: 0.9rem;">Comparte este link o código QR para que los candidatos puedan postularse.</p>
+            <div class="qr-code" style="text-align: center; margin: 1rem 0;">
+              <canvas id="qr-canvas"></canvas>
+            </div>
+            <div class="link-group">
+              <input type="text" id="link-postulante" readonly>
+              <button id="copiar-link-btn" class="btn btn-secondary" title="Copiar link">
+                <i class="fa-solid fa-copy"></i>
+              </button>
+            </div>
+            <a id="abrir-link-btn" href="#" target="_blank" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem; justify-content: center;">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              Probar Link
+            </a>
+          </div>
+          <div class="panel-container" style="margin-top: 1.5rem;">
+            <h3>Información General</h3>
+            <p><strong>ID de Búsqueda:</strong> <span id="aviso-id"></span></p>
+            <p><strong>Máx. CVs:</strong> <span id="aviso-max-cv"></span></p>
+            <p><strong>Válido hasta:</strong> <span id="aviso-valido-hasta"></span></p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <script>
+    document.querySelector('.nav-toggle').addEventListener('click', () => {
+      document.querySelector('.nav-menu').classList.toggle('active');
+    });
+  </script>
+  <script type="module" src="src/detalles-aviso.js"></script>
+</body>
+</html>

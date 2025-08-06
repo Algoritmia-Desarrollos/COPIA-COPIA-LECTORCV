@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Carga Masiva de CVs - Fagaz CV</title>
+
+    <script type="module" src="src/auth-guard.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="lista-avisos.html" class="nav-logo">Fagaz CV</a>
+      <ul class="nav-menu">
+        <li class="nav-link"><a href="lista-avisos.html">Mis Búsquedas</a></li>
+        <li class="nav-link"><a href="base-talentos.html">Base de datos</a></li>
+        <li class="nav-link"><a href="carga-masiva.html" class="active">Carga Masiva</a></li>
+      </ul>
+      <button class="nav-toggle"><i class="fa-solid fa-bars"></i></button>
+    </div>
+  </nav>
+
+  <main class="main-container">
+    <div class="panel-container" style="max-width: 900px; margin: auto;">
+      <div class="dashboard-header">
+        <h1>Cargar CVs a la Base de datos</h1>
+      </div>
+
+      <div class="form-section">
+        <h3><i class="fa-solid fa-share-nodes"></i> Link Público para Carga Directa</h3>
+        <p class="text-light">Comparte este link o código QR para que los candidatos suban su CV directamente a tu base de datos general (sin carpeta).</p>
+        <div class="share-section">
+            <div class="link-group">
+              <input type="text" id="link-publico" readonly>
+              <button id="copiar-link-btn" class="btn btn-secondary" title="Copiar link"><i class="fa-solid fa-copy"></i></button>
+            </div>
+            <div class="qr-code">
+              <canvas id="qr-canvas"></canvas>
+            </div>
+        </div>
+      </div>
+
+      <div class="form-section" style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+        <h3><i class="fa-solid fa-upload"></i> Carga Manual de Archivos</h3>
+        <p class="text-light">Sube uno o varios CVs en formato PDF. Los archivos se añadirán a una cola para ser procesados.</p>
+        
+        <div class="form-group">
+          <label for="folder-select-masivo">Subir a la carpeta (opcional)</label>
+          <select id="folder-select-masivo" class="form-control">
+            <option value="">Sin carpeta</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+          <label for="file-input-masivo">Seleccionar Archivos PDF</label>
+          <input type="file" id="file-input-masivo" accept="application/pdf" multiple class="form-control">
+        </div>
+
+        <div id="upload-queue-container">
+          <h3>Cola de Carga</h3>
+          <ul id="upload-queue-list" class="upload-queue-list">
+            <li class="queue-item-empty">La cola de carga está vacía.</li>
+          </ul>
+          <div class="form-actions queue-actions" style="margin-top: 1rem;">
+            <button id="clear-queue-btn" class="btn btn-secondary">Limpiar Finalizados</button>
+            <button id="process-queue-btn" class="btn btn-primary" disabled>
+              <i class="fa-solid fa-cloud-arrow-up"></i>
+              <span>Iniciar Carga</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+  <script>
+    document.querySelector('.nav-toggle').addEventListener('click', () => {
+      document.querySelector('.nav-menu').classList.toggle('active');
+    });
+  </script>
+  <script type="module" src="src/carga-masiva.js"></script>
+</body>
+</html>

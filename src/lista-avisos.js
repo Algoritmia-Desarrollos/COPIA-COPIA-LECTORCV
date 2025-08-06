@@ -1,0 +1,90 @@
+// src/lista-avisos.js
+
+import { supabase } from './supabaseClient.js';
+
+// --- SELECTORES DEL DOM ---
+const avisoListBody = document.getElementById('aviso-list-body');
+
+// --- LÓGICA PRINCIPAL ---
+
+// Al cargar la página, se ejecuta la función para cargar los avisos.
+window.addEventListener('DOMContentLoaded', loadAvisos);
+
+/**
+ * Obtiene los datos de los avisos y las postulaciones desde Supabase
+ * y luego llama a la función para renderizar la tabla.
+ */
+async function loadAvisos() {
+    if (!avisoListBody) return;
+
+    try {
+        // Hacemos dos consultas a la vez para ser más eficientes.
+        const [avisosRes, postulacionesRes] = await Promise.all([
+            supabase.from('v2_avisos').select('*').order('created_at', { ascending: false }),
+            supabase.from('v2_postulaciones').select('aviso_id', { count: 'exact' }) // Solo necesitamos el ID para contar
+        ]);
+
+        // Manejo de errores en las consultas
+        if (avisosRes.error) throw avisosRes.error;
+        if (postulacionesRes.error) throw postulacionesRes.error;
+
+        // Si las consultas son exitosas, renderizamos la tabla
+        renderizarTabla(avisosRes.data, postulacionesRes.data);
+
+    } catch (error) {
+        console.error("Error al cargar los avisos:", error);
+        avisoListBody.innerHTML = `<tr><td colspan="5" style="text-align: center; color: var(--danger-color);">Error al cargar los avisos.</td></tr>`;
+    }
+}
+
+/**
+ * Dibuja las filas de la tabla con los datos de los avisos y el conteo de postulaciones.
+ * @param {Array} avisos - El array de objetos de avisos desde Supabase.
+ * @param {Array} postulaciones - El array de objetos de postulaciones para contar.
+ */
+function renderizarTabla(avisos, postulaciones) {
+    // Si no hay avisos, mostrar un mensaje amigable.
+    if (!avisos || avisos.length === 0) {
+        avisoListBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Aún no has creado ninguna búsqueda laboral.</td></tr>';
+        return;
+    }
+
+    // Limpiar el estado de "Cargando..."
+    avisoListBody.innerHTML = '';
+
+    // Creamos un mapa para contar eficientemente las postulaciones por aviso.
+    const postulacionesMap = new Map();
+    if (postulaciones) {
+        for (const post of postulaciones) {
+            postulacionesMap.set(post.aviso_id, (postulacionesMap.get(post.aviso_id) || 0) + 1);
+        }
+    }
+
+    // Iteramos sobre cada aviso para crear su fila en la tabla.
+    avisos.forEach(aviso => {
+        const postulacionesCount = postulacionesMap.get(aviso.id) || 0;
+        
+        // Formateamos la fecha para que sea más legible.
+        const validoHasta = new Date(aviso.valido_hasta).toLocaleDateString('es-AR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            timeZone: 'UTC' // Importante para evitar problemas con la zona horaria del navegador
+        });
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${aviso.id}</td>
+            <td><strong>${aviso.titulo}</strong></td>
+            <td>${postulacionesCount} / ${aviso.max_cv || 'Ilimitados'}</td>
+            <td>${validoHasta}</td>
+            <td>
+                <div class="actions-group">
+                    <a href="resumenes.html?avisoId=${aviso.id}" class="btn btn-secondary">Ver Postulantes</a>
+                    <a href="detalles-aviso.html?id=${aviso.id}" class="btn btn-secondary">Detalles</a>
+                </div>
+            </td>
+        `;
+        avisoListBody.appendChild(row);
+    });
+}

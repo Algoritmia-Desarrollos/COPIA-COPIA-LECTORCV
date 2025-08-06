@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mis Búsquedas Laborales - Fagaz CV</title>
+
+    <script type="module" src="src/auth-guard.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <div class="nav-container">
+      <a href="lista-avisos.html" class="nav-logo">Fagaz CV</a>
+      <ul class="nav-menu">
+        <li class="nav-link"><a href="lista-avisos.html" class="active">Mis Búsquedas</a></li>
+        <li class="nav-link"><a href="base-talentos.html">Base de datos</a></li>
+        <li class="nav-link"><a href="carga-masiva.html">Carga Masiva</a></li>
+      </ul>
+      <button class="nav-toggle"><i class="fa-solid fa-bars"></i></button>
+    </div>
+  </nav>
+
+  <main class="main-container">
+    <div class="panel-container">
+      <div class="dashboard-header">
+        <h1>Mis Búsquedas Laborales</h1>
+        <a href="crear-aviso.html" class="btn btn-primary">
+          <i class="fa-solid fa-plus"></i>
+          Crear Nuevo Aviso
+        </a>
+      </div>
+      
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Puesto</th>
+              <th>Postulaciones</th>
+              <th>Válido Hasta</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="aviso-list-body">
+            <tr>
+              <td colspan="5" style="text-align: center;">
+                <i class="fa-solid fa-spinner fa-spin"></i> Cargando avisos...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Script para el menú hamburguesa en móvil
+    document.querySelector('.nav-toggle').addEventListener('click', () => {
+      document.querySelector('.nav-menu').classList.toggle('active');
+    });
+  </script>
+  <script type="module" src="src/lista-avisos.js"></script>
+</body>
+</html>

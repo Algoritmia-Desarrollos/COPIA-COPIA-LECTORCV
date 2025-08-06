@@ -1,0 +1,14 @@
+# supabase/config.toml
+
+# ... (otras configuraciones de tu proyecto)
+
+[functions]
+# Función para el proxy de OpenAI que ya tienes
+[functions.openai]
+  verify_jwt = true
+  # ... (resto de la configuración de openai)
+
+# ¡NUEVA! Función para el procesamiento de la V2
+[functions.v2-process-cv]
+  verify_jwt = false # Se llamará con la service_role key
+  # import_map y otros parámetros se pueden añadir si son necesarios
