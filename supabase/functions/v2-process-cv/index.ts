@@ -1,135 +1,202 @@
 // supabase/functions/v2-process-cv/index.ts
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { OpenAI } from "https://deno.land/x/openai/mod.ts";
+import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  GoogleGenerativeAI,
+  HarmCategory,
+  HarmBlockThreshold,
+} from "https://esm.sh/@google/generative-ai";
 
+// Cliente de Supabase con permisos de administrador para poder escribir en la base de datos.
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
   Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-// --- ¡NUEVO PROMPT MEJORADO! ---
+const geminiApiKey = Deno.env.get("GEMINI_API_KEY");
+const genAI = new GoogleGenerativeAI(geminiApiKey!);
+
+// Función para estandarizar nombres a formato "Nombre Apellido".
+function toTitleCase(str: string | null): string | null {
+  if (!str || typeof str !== 'string') return null;
+  // Limpia espacios extra, convierte a minúsculas y luego capitaliza cada palabra.
+  return str.toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(word => {
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }).join(' ');
+}
+
+// El prompt de IA no necesita cambios, ya que su única función es extraer los datos crudos.
 const HEADHUNTER_PROMPT_V2 = `
-Actúa como un Headhunter y Especialista Senior en Reclutamiento y Selección para una consultora de élite. Tu criterio es agudo, analítico y está orientado a resultados. Tu misión es realizar un análisis forense de un CV contra una búsqueda laboral, culminando en una calificación precisa y diferenciada, y una justificación profesional.
-
-**Contexto de la Búsqueda (Job Description):**
-{CONTEXTO_AVISO}
-
-**Texto del CV a Analizar:**
-"""{TEXTO_CV}"""
-
----
-
-**METODOLOGÍA DE EVALUACIÓN ESTRUCTURADA Y SISTEMA DE PUNTUACIÓN (SEGUIR ESTRICTAMENTE):**
-
-**PASO 1: Extracción de Datos Fundamentales.**
-Primero, extrae los siguientes datos clave. Si un dato no está presente, usa null.
--   nombreCompleto: El nombre más prominente del candidato.
--   email: El correo electrónico más profesional que encuentres.
--   telefono: El número de teléfono principal, priorizando móviles.
-
-**PASO 2: Sistema de Calificación Ponderado (Puntuación de 0 a 100).**
-Calcularás la nota final siguiendo este sistema de puntos que refleja las prioridades del reclutador. La nota final será la suma de los puntos de las siguientes 3 categorías.
-
-**A. CONDICIONES INDISPENSABLES (Ponderación: 50 Puntos Máximo)**
-   - Este es el factor más importante. Comienza la evaluación de esta categoría con 0 puntos.
-   - Analiza CADA condición indispensable. Por CADA una que el candidato CUMPLE (ya sea explícitamente o si su experiencia lo sugiere fuertemente), suma la cantidad de puntos correspondiente (**50 Puntos / Total de Condiciones Indispensables**).
-   - **Regla de Penalización Clave:** Si un candidato no cumple con todas las condiciones, su puntaje aquí será menor a 50. Esto impactará significativamente su nota final, reflejando que es un perfil a considerar con reservas.
-
-**B. CONDICIONES DESEABLES (Ponderación: 25 Puntos Máximo)**
-   - Comienza con 0 puntos para esta categoría.
-   - Por CADA condición deseable que el candidato CUMPLE, suma la cantidad de puntos correspondiente (**25 Puntos / Total de Condiciones Deseables**). Sé estricto; si solo cumple parcialmente, otorga la mitad de los puntos para esa condición.
-
-**C. ANÁLISIS DE EXPERIENCIA Y MATCH GENERAL (Ponderación: 25 Puntos Máximo)**
-   - Comienza con 0 puntos para esta categoría.
-   - Evalúa la calidad y relevancia de la experiencia laboral del candidato en relación con la descripción general del puesto.
-   - **Coincidencia de Rol y Funciones (hasta 15 puntos):** ¿La experiencia es en un puesto con un título y funciones idénticos o muy similares al del aviso? Un match perfecto (mismo rol, mismas tareas) otorga los 15 puntos. Un match parcial (rol diferente pero con tareas transferibles) otorga entre 5 y 10 puntos.
-   - **Calidad del Perfil (hasta 10 puntos):** Evalúa la calidad general del CV. ¿Muestra una progresión de carrera lógica? ¿Es estable laboralmente? ¿Presenta logros cuantificables (ej: "aumenté ventas 15%") en lugar de solo listar tareas? Un CV con logros claros y buena estabilidad obtiene más puntos.
-
-**PASO 3: Elaboración de la Justificación Profesional.**
-Redacta un párrafo único y conciso que resuma tu dictamen, justificando la nota final basándote en el sistema de puntos.
-   - **Veredicto Inicial:** Comienza con una afirmación clara sobre el nivel de "match".
-   - **Argumento Central:** Justifica la nota mencionando explícitamente los puntos obtenidos en cada categoría. (Ej: "El candidato obtiene 40/50 en condiciones indispensables al cumplir 4 de 5. Suma 15/25 en deseables y su experiencia tiene un match fuerte con la descripción (+12 pts)...").
-   - **Conclusión y Recomendación:** Cierra con la nota final calculada y una recomendación clara. (Ej: "...alcanzando una calificación final de 67/100. Se recomienda una entrevista secundaria." o "...alcanzando una calificación de 92/100. Es un candidato prioritario.").
-
-**Formato de Salida (JSON estricto):**
-Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (el número entero final calculado) y "justificacion" (el string de texto).
+    Actúa como un experto en RRHH y reclutamiento. Analiza el siguiente CV y califícalo de 1 a 100 según la calidad general, experiencia y adecuación para un rol profesional.
+    Además, extrae el nombre completo, email y teléfono. Finalmente, escribe una justificación de 3 o 4 líneas explicando la calificación y resumiendo el perfil.
+    CV: """{CONTEXTO}"""
+    Responde únicamente con un objeto JSON con las claves "calificacion" (number), "justificacion" (string), "nombreCompleto" (string), "email" (string) y "telefono" (string).
+    Si un dato no se encuentra, usa null. La justificación debe ser concisa y profesional.
 `;
 
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' } });
+async function processCV(cvText: string, jobRequirements: string) {
+  if (!geminiApiKey) {
+    throw new Error("GEMINI_API_KEY no está configurada en las variables de entorno.");
   }
 
-  try {
-    const { record: postulacion } = await req.json();
-    const textoCV = postulacion.texto_cv_especifico;
+  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const { data: aviso, error: avisoError } = await supabaseAdmin
-      .from('v2_avisos').select('*').eq('id', postulacion.aviso_id).single();
-    if (avisoError) throw new Error(`Error al obtener aviso: ${avisoError.message}`);
+  const generationConfig = {
+    temperature: 0.2,
+    topP: 1,
+    topK: 1,
+    maxOutputTokens: 8192,
+    responseMimeType: "application/json",
+  };
 
-    const contextoAviso = `
-      - Puesto: ${aviso.titulo}
-      - Descripción: ${aviso.descripcion}
-      - Condiciones Necesarias: ${aviso.condiciones_necesarias.join(', ') || 'No especificadas'}
-      - Condiciones Deseables: ${aviso.condiciones_deseables.join(', ') || 'No especificadas'}
-    `;
-    const finalPrompt = HEADHUNTER_PROMPT_V2
-      .replace('{CONTEXTO_AVISO}', contextoAviso)
-      .replace('{TEXTO_CV}', textoCV.substring(0, 12000));
+  const safetySettings = [
+    { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+  ];
 
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY")! });
-    const chatCompletion = await openai.chat.completions.create({
-      messages: [{ role: "user", content: finalPrompt }],
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
-    });
-    
-    const iaResult = JSON.parse(chatCompletion.choices[0].message.content);
+  const prompt = `
+    Analiza el siguiente CV en texto plano y compáralo con los requisitos del puesto.
+    Extrae la información solicitada y devuelve el resultado únicamente en formato JSON.
 
-    // --- ¡LÓGICA ACTUALIZADA! ---
-    // Ahora hacemos dos actualizaciones en paralelo para mayor eficiencia.
-    await Promise.all([
-      // 1. Actualizar la postulación con la calificación y el resumen.
-      supabaseAdmin
-        .from('v2_postulaciones')
-        .update({
-          calificacion: iaResult.calificacion,
-          resumen: iaResult.justificacion
-        })
-        .eq('id', postulacion.id),
-      
-      // 2. Actualizar el perfil del candidato con los datos de contacto extraídos.
-      supabaseAdmin
-        .from('v2_candidatos')
-        .update({
-          nombre_candidato: iaResult.nombreCompleto,
-          email: iaResult.email, // Actualiza el email si la IA encuentra uno mejor formateado
-          telefono: iaResult.telefono,
-          updated_at: new Date()
-        })
-        .eq('id', postulacion.candidato_id)
-    ]);
-    
-    return new Response(JSON.stringify({ success: true, message: `Postulación ${postulacion.id} procesada.` }), {
-      headers: { 'Content-Type': 'application/json' },
-      status: 200,
-    });
+    CV del candidato:
+    ---
+    ${cvText}
+    ---
 
-  } catch (error) {
-    console.error('Error en la función v2-process-cv:', error.message);
-    const { record } = await req.json().catch(() => ({ record: {} }));
-    if (record?.id) {
-        await supabaseAdmin
-            .from('v2_postulaciones')
-            .update({ calificacion: -1, resumen: `Error en análisis: ${error.message}` })
-            .eq('id', record.id);
+    Requisitos del puesto:
+    ---
+    ${jobRequirements}
+    ---
+
+    Basado en el CV y los requisitos, proporciona la siguiente información en un objeto JSON con las siguientes claves:
+    - "nombre": El nombre completo del candidato.
+    - "email": El correo electrónico del candidato.
+    - "telefono": El número de teléfono del candidato.
+    - "resumen": Un resumen conciso (máximo 200 palabras) de la experiencia y habilidades del candidato, destacando la relevancia para el puesto.
+    - "calificacion": Una calificación numérica del 1 al 100 sobre qué tan bien el perfil del candidato se ajusta a los requisitos del puesto. Considera la experiencia, habilidades y educación. Una calificación más alta significa un mejor ajuste.
+
+    Asegúrate de que la salida sea solo un objeto JSON válido, sin texto adicional antes o después.
+    Ejemplo de formato de salida:
+    {
+      "nombre": "Juan Pérez",
+      "email": "juan.perez@example.com",
+      "telefono": "+123456789",
+      "resumen": "Juan es un desarrollador de software con 5 años de experiencia en...",
+      "calificacion": 85
     }
-    return new Response(JSON.stringify({ error: error.message }), {
-      headers: { 'Content-Type': 'application/json' },
-      status: 500,
+  `;
+
+  const result = await model.generateContent({
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig,
+    safetySettings,
+  });
+
+  try {
+    const responseText = result.response.text();
+    const parsedResult = JSON.parse(responseText);
+    return {
+      nombre: parsedResult.nombre || null,
+      email: parsedResult.email || null,
+      telefono: parsedResult.telefono || null,
+      resumen: parsedResult.resumen || "No se pudo generar un resumen.",
+      calificacion: parsedResult.calificacion || 0,
+    };
+  } catch (error) {
+    console.error("Error al analizar la respuesta de la IA:", error);
+    console.error("Respuesta recibida de la IA:", result.response.text());
+    throw new Error("No se pudo analizar la respuesta de la IA. La respuesta no es un JSON válido.");
+  }
+}
+
+serve(async (req) => {
+  try {
+    const { record } = await req.json();
+    const {
+      id: postulacionId,
+      aviso_id,
+      base64_cv_especifico,
+      texto_cv_especifico,
+    } = record;
+
+    if (!postulacionId || !aviso_id) {
+      return new Response("Faltan postulacionId o aviso_id", { status: 400 });
+    }
+
+    // 1. Obtener los detalles del aviso
+    const { data: aviso, error: avisoError } = await supabase
+      .from("v2_avisos")
+      .select("titulo, descripcion, condiciones_necesarias, condiciones_deseables")
+      .eq("id", aviso_id)
+      .single();
+
+    if (avisoError) {
+      console.error("Error al obtener el aviso:", avisoError);
+      throw new Error(`Error al obtener el aviso: ${avisoError.message}`);
+    }
+
+    const jobRequirements = `
+      Título: ${aviso.titulo}
+      Descripción: ${aviso.descripcion}
+      Condiciones Necesarias: ${aviso.condiciones_necesarias?.join(", ")}
+      Condiciones Deseables: ${aviso.condiciones_deseables?.join(", ")}
+    `;
+
+    let cvText = texto_cv_especifico;
+
+    // 2. Si no hay texto de CV, decodificar de base64
+    if (!cvText && base64_cv_especifico) {
+      // Esta es una simulación. Deberías tener una función 'extract-text' que funcione.
+      // Por ahora, asumimos que el base64 es texto plano para fines de prueba.
+      try {
+        cvText = atob(base64_cv_especifico);
+      } catch (e) {
+         console.error("Error decodificando base64, puede que no sea texto plano:", e)
+         // En un caso real, aquí invocarías la función que extrae texto de PDF/DOCX
+         // const { data: textData, error: textError } = await supabase.functions.invoke(
+         //   "extract-text",
+         //   { body: { base64: base64_cv_especifico } },
+         // );
+         // if (textError) throw textError;
+         cvText = "Error: No se pudo decodificar el CV desde base64. La función 'extract-text' debe ser implementada.";
+      }
+    }
+
+    if (!cvText) {
+      return new Response("No se pudo obtener el texto del CV", { status: 400 });
+    }
+
+    // 3. Procesar el CV con Gemini AI
+    const analysisResult = await processCV(cvText, jobRequirements);
+
+    // 4. Actualizar la tabla de postulaciones con el resultado
+    const { data: updateData, error: updateError } = await supabase
+      .from("v2_postulaciones")
+      .update({
+        calificacion: analysisResult.calificacion,
+        resumen: analysisResult.resumen,
+        nombre_candidato_snapshot: analysisResult.nombre,
+        email_snapshot: analysisResult.email,
+        telefono_snapshot: analysisResult.telefono,
+        texto_cv_especifico: cvText, // Guardar el texto extraído
+      })
+      .eq("id", postulacionId);
+
+    if (updateError) {
+      console.error("Error al actualizar la postulación:", updateError);
+      throw new Error(
+        `Error al actualizar la postulación: ${updateError.message}`,
+      );
+    }
+
+    return new Response(JSON.stringify({ success: true, data: updateData }), {
+      headers: { "Content-Type": "application/json" },
     });
+  } catch (error) {
+    console.error("Error en el servidor:", error);
+    return new Response(error.message, { status: 500 });
   }
 });

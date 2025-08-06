@@ -223,11 +223,29 @@ a:hover { color: var(--primary-hover); }
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  table-layout: fixed; /* Clave para un layout estable */
 }
 .data-table th, .data-table td {
   padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
-  vertical-align: middle;
+  border-bottom: none; /* Se quita el borde de la celda */
+  vertical-align: middle; /* Se centra verticalmente */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* No hay efecto de hover para expandir celdas */
+
+.data-table tbody tr {
+    transition: background-color 0.2s ease;
+    border-bottom: 1px solid var(--border-color); /* Se aplica el borde a la fila */
+}
+.data-table tbody tr:has(.candidate-checkbox:checked) {
+    background-color: #eef2ff;
+    box-shadow: inset 3px 0 0 0 var(--primary-color);
+}
+.data-table tbody tr:hover {
+    background-color: #f8fafc;
 }
 .data-table thead th {
   font-weight: 600;
@@ -237,7 +255,47 @@ a:hover { color: var(--primary-hover); }
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.actions-group { display: flex; flex-wrap: nowrap; gap: 0.5rem; }
+.actions-group {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.actions-group .btn {
+  padding: 0.4rem 0.6rem;
+  flex-shrink: 0; /* Evita que los botones se encojan */
+}
+
+.actions-group .btn[data-action="edit"],
+.actions-group .btn[data-action="delete"] {
+  padding: 0.4rem;
+  width: 2rem;
+  height: 2rem;
+  font-size: 0.8rem;
+}
+
+.candidate-name {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+
+.candidate-file, .text-light {
+    font-size: 0.875rem;
+    color: var(--text-light);
+}
+
+/* ===== CORRECCIÓN: Estilos de fila para Drag & Drop y Selección ===== */
+.data-table tbody tr {
+    cursor: pointer;
+}
+.data-table tbody tr[draggable="true"]:active {
+    cursor: grabbing;
+}
+.data-table tbody tr.dragging {
+    opacity: 0.5;
+    background-color: #eef2ff;
+}
 
 /* Modal (Pop-up) */
 .modal-container { 
@@ -301,7 +359,7 @@ a:hover { color: var(--primary-hover); }
   grid-template-columns: 320px 1fr;
   gap: 2rem; align-items: flex-start;
 }
-.sidebar-wrapper { position: sticky; top: 90px; }
+.sidebar-wrapper { position: sticky; top: 90px; display: flex; flex-direction: column; gap: 1.5rem; }
 .folder-list { list-style: none; padding: 0; margin: 0; }
 .folder-list .folder-item {
   display: flex; align-items: center; gap: 0.75rem;
@@ -310,6 +368,31 @@ a:hover { color: var(--primary-hover); }
 }
 .folder-list .folder-item:hover { background-color: var(--bg-light); }
 .folder-list .folder-item.active { background-color: var(--primary-color); color: var(--text-white); }
+.folder-item.drag-over {
+    outline: 2px dashed var(--primary-color);
+    background-color: #eef2ff !important;
+    color: var(--text-dark) !important;
+}
+
+.folder-item-actions {
+  display: none;
+  margin-left: auto;
+}
+
+.folder-item:hover .folder-item-actions {
+  display: flex;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  padding: 0.25rem;
+}
+.btn-icon:hover {
+  color: var(--text-dark);
+}
 
 /* Cola de Carga Masiva */
 .upload-queue-list {

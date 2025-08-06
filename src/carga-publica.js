@@ -76,49 +76,46 @@ cvForm.addEventListener('submit', async (e) => {
  * Lógica para crear o actualizar un candidato en la base de talentos.
  */
 async function procesarCandidato(iaData, base64, textoCV, nombreArchivo) {
+    const formattedName = toTitleCase(iaData.nombreCompleto);
+    if (!formattedName) throw new Error("El nombre extraído del CV no es válido.");
+
     const { data: candidatoExistente, error: findError } = await supabase
         .from('v2_candidatos')
-        .select('id')
-        .eq('email', iaData.email)
-        .single();
+        .select('id, email')
+        .eq('nombre_candidato', formattedName)
+        .maybeSingle();
 
-    if (findError && findError.code !== 'PGRST116') {
-        throw new Error(`Error al buscar candidato: ${findError.message}`);
-    }
+    if (findError) throw new Error(`Error al buscar candidato: ${findError.message}`);
 
+    const candidatoData = {
+        nombre_candidato: formattedName,
+        telefono: iaData.telefono,
+        email: iaData.email,
+        base64_general: base64,
+        texto_cv_general: textoCV,
+        nombre_archivo_general: nombreArchivo,
+        updated_at: new Date().toISOString()
+    };
+
+    let error;
     if (candidatoExistente) {
-        // --- SI EL CANDIDATO YA EXISTE, ACTUALIZAMOS SU PERFIL ---
-        console.log(`Candidato existente encontrado. Actualizando ID: ${candidatoExistente.id}.`);
-        const { error: updateError } = await supabase
-            .from('v2_candidatos')
-            .update({
-                nombre_candidato: iaData.nombreCompleto,
-                telefono: iaData.telefono,
-                base64_general: base64,
-                texto_cv_general: textoCV,
-                nombre_archivo_general: nombreArchivo,
-                updated_at: new Date()
-            })
-            .eq('id', candidatoExistente.id);
-
-        if (updateError) throw new Error(`Error al actualizar candidato: ${updateError.message}`);
-
+        if (candidatoExistente.email === iaData.email) {
+            ({ error } = await supabase.from('v2_candidatos').update(candidatoData).eq('id', candidatoExistente.id));
+        } else {
+            ({ error } = await supabase.from('v2_candidatos').insert(candidatoData));
+        }
     } else {
-        // --- SI EL CANDIDATO ES NUEVO, LO CREAMOS ---
-        console.log("Candidato nuevo. Creando registro...");
-        const { error: insertError } = await supabase
-            .from('v2_candidatos')
-            .insert({
-                email: iaData.email,
-                nombre_candidato: iaData.nombreCompleto,
-                telefono: iaData.telefono,
-                base64_general: base64,
-                texto_cv_general: textoCV,
-                nombre_archivo_general: nombreArchivo
-            });
-        
-        if (insertError) throw new Error(`Error al crear candidato: ${insertError.message}`);
+        ({ error } = await supabase.from('v2_candidatos').insert(candidatoData));
     }
+
+    if (error) throw new Error(`Error en base de datos: ${error.message}`);
+}
+
+function toTitleCase(str) {
+    if (!str || typeof str !== 'string') return null;
+    return str.toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(word => {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
 }
 
 // Las siguientes funciones son idénticas a las de `src/index.js`
