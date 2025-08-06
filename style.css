@@ -217,19 +217,38 @@ a:hover { color: var(--primary-hover); }
   font-weight: bold; padding: 0; line-height: 1;
 }
 
-/* Tablas */
+/* ===== TABLAS MEJORADAS ===== */
 .table-container { overflow-x: auto; }
 .data-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  table-layout: fixed; /* Asegura que las columnas respeten el ancho */
 }
 .data-table th, .data-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 1rem;
   vertical-align: middle;
-  height: 65px; /* Altura de fila FIJA */
-  box-sizing: border-box;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis; /* Añade "..." si el texto no cabe */
+}
+/* Estilo para el nombre en negrita y el archivo debajo */
+.data-table td .candidate-name {
+    font-weight: 600;
+    color: var(--text-dark);
+}
+.data-table td .candidate-filename {
+    font-size: 0.8rem;
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    max-width: 250px; /* Ajusta según sea necesario */
+}
+.data-table tbody tr {
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    border-bottom: 1px solid var(--border-color);
 }
 .data-table tbody tr:has(.postulacion-checkbox:checked),
 .data-table tbody tr:has(.candidate-checkbox:checked) {
@@ -239,9 +258,6 @@ a:hover { color: var(--primary-hover); }
 .data-table tbody tr:hover {
     background-color: #f8fafc;
 }
-.data-table tbody tr {
-    cursor: pointer;
-}
 .data-table thead th {
   font-weight: 600;
   color: var(--text-light);
@@ -249,44 +265,97 @@ a:hover { color: var(--primary-hover); }
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-color);
 }
 .actions-group { 
+    display: flex; 
+    flex-wrap: nowrap; 
+    gap: 0.5rem; 
+}
+
+#postulantes-panel .actions-group {
+    justify-content: flex-start;
+    margin-bottom: 1.5rem;
+}
+.table-pagination-footer { 
   display: flex; 
-  flex-wrap: nowrap; 
-  gap: 0.5rem; 
-  height: 100%;
-  align-items: center;
+  justify-content: space-between; 
+  align-items: center; 
+  margin-top: 1.5rem; 
+  padding-top: 1.5rem; 
+  border-top: 1px solid var(--border-color); 
+}
+.data-table tbody tr {
+    cursor: pointer;
+}
+.data-table tbody tr[draggable="true"]:active {
+    cursor: grabbing;
 }
 
 /* Modal (Pop-up) */
-.modal-container { 
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-  background-color: rgba(15, 23, 42, 0.6); 
-  display: flex; justify-content: center; align-items: center; 
-  z-index: 1000; opacity: 0; 
-  transition: opacity 0.3s ease; 
-  backdrop-filter: blur(4px);
-  pointer-events: none;
+.modal-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(15, 23, 42, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+  box-sizing: border-box;
 }
-.modal-container:not(.hidden) { opacity: 1; pointer-events: auto; }
-.modal-content { 
-  background: var(--bg-white); 
-  padding: 2rem; 
-  border-radius: var(--radius-lg); 
-  box-shadow: var(--shadow-lg); 
-  width: 90%; max-width: 600px; 
-  transform: scale(0.95); 
-  transition: transform 0.3s ease;
-}
-.modal-container:not(.hidden) .modal-content { transform: scale(1); }
-.modal-header { 
-  display: flex; justify-content: space-between; align-items: center; 
-  border-bottom: 1px solid var(--border-color); 
-  padding-bottom: 1rem; margin-bottom: 1.5rem; 
-}
-.modal-header h2 { margin: 0; font-size: 1.5rem; color: var(--text-dark); }
-.modal-close-btn { background: none; border: none; font-size: 1.75rem; cursor: pointer; color: var(--text-light); }
 
+.modal-content {
+  background: var(--bg-white);
+  padding: 2rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 600px;
+  animation: modal-fade-in 0.3s ease;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--text-dark);
+  font-size: 1.25rem;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.75rem;
+  cursor: pointer;
+  color: var(--text-light);
+  line-height: 1;
+}
+
+body.modal-open {
+  overflow: hidden;
+}
+
+@keyframes modal-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
 /* --- 5. ESTILOS ESPECÍFICOS --- */
 
@@ -299,22 +368,20 @@ a:hover { color: var(--primary-hover); }
 }
 
 /* Drop Zone (Carga de archivos) */
-.drop-zone {
-  display: flex; flex-direction: column;
-  justify-content: center; align-items: center;
-  padding: 2.5rem;
-  border: 2px dashed var(--input-border);
-  border-radius: var(--radius-lg);
-  background-color: var(--bg-light);
-  cursor: pointer; text-align: center;
-  transition: background-color 0.2s, border-color 0.2s;
-}
-.drop-zone.drag-over { background-color: #eef2ff; border-color: var(--primary-color); }
-.drop-zone .upload-icon { font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem; }
-.drop-zone .upload-text { font-weight: 600; color: var(--text-dark); }
-.drop-zone .upload-hint { font-size: 0.875rem; color: var(--text-light); margin-top: 0.5rem; }
+.drop-zone { /* ... */ }
 
 /* Layout Base de Talentos y Resúmenes */
+.resumenes-layout {
+  display: grid;
+  align-items: flex-start;
+  grid-template-columns: 0fr 1fr;
+  gap: 0;
+  transition: grid-template-columns 0.3s ease, gap 0.3s ease;
+}
+.resumenes-layout.sidebar-visible {
+  grid-template-columns: 280px 1fr;
+  gap: 2rem;
+}
 .db-layout {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -323,91 +390,106 @@ a:hover { color: var(--primary-hover); }
 .sidebar-wrapper { position: sticky; top: 90px; }
 .folder-list { list-style: none; padding: 0; margin: 0; }
 .folder-list .folder-item {
-  display: flex; align-items: center; gap: 0.75rem;
-  padding: 0.75rem 1rem; border-radius: var(--radius-md);
-  cursor: pointer; transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 0.2s;
 }
 .folder-list .folder-item:hover { background-color: var(--bg-light); }
+.folder-list + .folder-actions {
+  margin-top: 1rem;
+}
 .folder-list .folder-item.active { background-color: var(--primary-color); color: var(--text-white); }
+
+.sidebar-wrapper .panel-container + .panel-container {
+  margin-top: 1.5rem;
+}
+
+/* Estilos para Drag & Drop de Carpetas */
+.folder-subtree {
+  list-style: none;
+  padding-left: 0;
+}
+.is-subfolder {
+    background-color: #f8fafc;
+}
+.folder-item.dragging, .data-table tr.dragging {
+  opacity: 0.5;
+  background: #e0e7ff;
+}
 .folder-item.drag-over {
-    outline: 2px dashed var(--primary-color);
-    background-color: #eef2ff !important;
-    color: var(--text-dark) !important;
+  background-color: #c7d2fe;
+  box-shadow: inset 0 0 0 2px var(--primary-color);
 }
 
-/* Cola de Carga Masiva */
-.upload-queue-list { /* ... */ }
-.queue-item { /* ... */ }
+/* Estilos para Desplegar Carpetas */
+.folder-toggle {
+    display: inline-block;
+    width: 1rem;
+    text-align: center;
+    transition: transform 0.2s ease;
+}
+li:not(.open) > .folder-subtree {
+    display: none;
+}
+li.open > .folder-item .folder-toggle {
+    transform: rotate(90deg);
+}
 
-/* Link Público y QR */
-.share-section { /* ... */ }
+/* Estilos para Acciones de Carpeta */
+.folder-item-actions {
+    margin-left: auto;
+    display: flex;
+    gap: 0.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+}
+.folder-item:hover .folder-item-actions {
+    opacity: 1;
+    visibility: visible;
+}
+.btn-icon {
+    background: none;
+    border: none;
+    color: var(--text-light);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--radius-md);
+}
+.btn-icon:hover {
+    background-color: #e5e7eb;
+    color: var(--text-dark);
+}
+.folder-item.active .btn-icon {
+    color: var(--text-white);
+}
+.folder-item.active .btn-icon:hover {
+    background-color: rgba(255,255,255,0.2);
+}
 
 
-/* ===== AJUSTES FINALES PARA RESUMENES Y BASE DE TALENTOS ===== */
-
-/* Estilo para el panel de acciones flotante a la DERECHA */
+/* ===== AJUSTES PARA PANELES FLOTANTES Y TABLAS ===== */
 .sidebar-wrapper.floating {
-    position: absolute;
-    top: 0;
-    right: -280px; /* Posición inicial fuera de la pantalla */
-    width: 250px;
-    z-index: 10;
-    transition: transform 0.3s ease-in-out;
-}
-
-.sidebar-wrapper.floating.visible {
-    transform: translateX(-280px); /* Mueve el panel a la vista desde la derecha */
-}
-
-/* Ajustes en la tabla para que ocupe más espacio y se vea mejor */
-.data-table {
-  table-layout: auto; /* Permite que las columnas se ajusten al contenido */
-  width: 100%;
+    position: sticky;
+    top: 90px;
+    overflow: hidden;
 }
 .data-table td, .data-table th {
-  padding: 1rem;
-  border-bottom: 1px solid var(--border-color);
-  vertical-align: middle;
+  padding: 1rem 0.75rem;
 }
-
-.data-table .candidate-name-cell {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    height: 100%;
-    overflow: hidden;
-}
-
-.data-table .candidate-name {
-    font-weight: 600;
-    color: var(--text-dark);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.data-table .candidate-filename {
-    font-size: 0.8rem; /* Tamaño de fuente más chico para el nombre del archivo */
-    color: var(--text-light);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.data-table td:first-child, .data-table th:first-child {
-  padding-left: 1.5rem; /* Más espacio a la izquierda para que no se pegue al borde */
+.data-table th:first-child, .data-table td:first-child {
+  width: 40px;
+  text-align: center;
+  padding-left: 1rem;
+  padding-right: 0.5rem;
 }
 .data-table td:last-child, .data-table th:last-child {
   text-align: right;
   padding-right: 1.5rem;
-}
-.data-table .actions-group {
-    justify-content: flex-end;
-}
-.data-table tbody tr[draggable="true"] {
-    cursor: grab;
-}
-.data-table tbody tr[draggable="true"]:active {
-    cursor: grabbing;
 }
 
 
@@ -432,20 +514,182 @@ a:hover { color: var(--primary-hover); }
   .nav-menu.active { display: flex; }
   .nav-toggle { display: block; background: none; border: none; font-size: 1.5rem; cursor: pointer; }
   
-  .db-layout, .details-grid { grid-template-columns: 1fr; }
-  .sidebar-wrapper, .details-sidebar { position: static; }
-  
-  /* Hacemos el panel flotante fijo en móviles */
-  .sidebar-wrapper.floating {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
+  .resumenes-layout, .db-layout { 
+    grid-template-columns: 1fr; 
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-wrapper { 
+    position: static; 
     width: 100%;
+    order: 2; /* Mueve el panel de acciones abajo en móvil */
+  }
+  
+  .sidebar-wrapper.floating {
+    position: fixed; 
+    bottom: 0; 
+    left: 0; 
+    right: 0;
+    width: 100%; 
+    z-index: 100;
+    top: auto;
     transform: translateY(100%);
     transition: transform 0.3s ease-in-out;
   }
-  .sidebar-wrapper.floating.visible {
+  .resumenes-layout.sidebar-visible .sidebar-wrapper.floating {
     transform: translateY(0);
   }
+}
+
+/* --- 7. ESTILOS PARA DETALLES DE AVISO Y MODALES --- */
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text-dark);
+}
+
+#postulantes-panel {
+  margin-bottom: 2rem;
+}
+
+.postulantes-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.postulantes-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.postulantes-list li:last-child {
+  border-bottom: none;
+}
+
+.postulante-info strong {
+  display: block;
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.postulante-info small {
+  color: var(--text-light);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(15, 23, 42, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+  box-sizing: border-box;
+  animation: modal-fade-in 0.3s ease;
+}
+
+.modal-container {
+  background: var(--bg-white);
+  padding: 2rem;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  margin: auto !important;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 1rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--text-dark);
+  font-size: 1.25rem;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 1.75rem;
+  cursor: pointer;
+  color: var(--text-light);
+  line-height: 1;
+}
+
+.modal-content {
+  overflow-y: auto;
+  flex-grow: 1;
+  padding-right: 1rem; /* para el scrollbar */
+}
+
+.modal-footer {
+  padding-top: 1.5rem;
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.carpeta-group {
+  margin-bottom: 1.5rem;
+}
+.carpeta-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.carpeta-group h4 {
+  margin: 0;
+  color: var(--text-dark);
+}
+
+.select-all-folder-label {
+  font-size: 0.8rem;
+  color: var(--text-light);
+  cursor: pointer;
+}
+.carpeta-group ul, .candidate-list-modal {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.carpeta-group li {
+  padding: 0.25rem 0;
+}
+.carpeta-group label {
+  cursor: pointer;
 }

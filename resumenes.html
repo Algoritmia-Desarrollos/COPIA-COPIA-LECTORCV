@@ -27,11 +27,16 @@
     </div>
   </nav>
 
-  <main class="main-container">
-    <div style="position: relative;">
-      
-      <aside id="bulk-actions-container" class="sidebar-wrapper floating hidden">
+  <main class="main-container db-layout">
+    <div class="sidebar-wrapper">
         <div class="panel-container">
+            <h3>Búsquedas</h3>
+            <ul id="avisos-list" class="folder-list">
+                <!-- Avisos se cargarán aquí -->
+                <li>Cargando búsquedas...</li>
+            </ul>
+        </div>
+        <div id="bulk-actions-container" class="panel-container hidden" style="margin-top: 1.5rem;">
             <h3 id="bulk-actions-title">Acciones</h3>
             <p id="bulk-actions-count" class="text-light" style="margin-bottom: 1rem;">0 seleccionados</p>
             <button id="bulk-delete-btn" class="btn btn-danger" style="width: 100%;">
@@ -39,40 +44,37 @@
                 Eliminar de la Búsqueda
             </button>
         </div>
-      </aside>
+    </div>
 
-      <div class="panel-container">
+    <div class="panel-container">
         <div class="dashboard-header">
-          <h1 id="panel-title">Cargando panel...</h1>
-          <div class="actions-group">
-              <button id="upload-cv-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar CVs</button>
-              <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles del Aviso</a>
-              <a href="lista-avisos.html" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Volver</a>
-          </div>
+            <h1 id="panel-title">Cargando panel...</h1>
+            <div class="actions-group">
+                <button id="upload-cv-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar CVs</button>
+                <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles del Aviso</a>
+                <a href="lista-avisos.html" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Volver</a>
+            </div>
         </div>
 
         <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;">Iniciando...</div>
         
         <div class="table-container">
-          <table id="cv-table" class="data-table">
-            <thead>
-              <tr>
-                <th style="width: 5%;"><input type="checkbox" id="select-all-checkbox"></th>
-                <th style="width: 25%;">Nombre Candidato</th>
-                <th style="width: 20%;">Archivo</th>
-                <th style="width: 25%;">Contacto</th>
-                <th style="width: 10%;">Calificación</th>
-                <th style="width: 5%;">Análisis</th>
-                <th style="width: 10%; text-align: right;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="resumenes-list">
-                <tr><td colspan="7" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>
-            </tbody>
-          </table>
+            <table id="cv-table" class="data-table">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;"><input type="checkbox" id="select-all-checkbox"></th>
+                        <th style="width: 30%;">Nombre Candidato</th>
+                        <th style="width: 30%;">Contacto</th>
+                        <th style="width: 10%;">Calificación</th>
+                        <th style="width: 15%;">Análisis</th>
+                        <th style="width: 10%; text-align: right;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="resumenes-list">
+                    <tr><td colspan="6" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>
+                </tbody>
+            </table>
         </div>
-      </div>
-
     </div>
   </main>
 
@@ -82,7 +84,10 @@
             <h2 id="modal-title"></h2>
             <button id="modal-close" class="modal-close-btn">&times;</button>
         </div>
-        <div id="modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 60vh; overflow-y: auto;"></div>
+        <div id="modal-body" class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+            <div id="modal-resumen-content" style="white-space: pre-wrap;"></div>
+            <textarea id="modal-notas-textarea" class="form-control hidden" style="min-height: 150px;" placeholder="Escribe tus notas aquí..."></textarea>
+        </div>
         <div class="modal-footer" style="text-align: right; margin-top: 1rem;">
             <button id="modal-save-notes" class="btn btn-primary hidden">Guardar Notas</button>
             <button id="modal-cancel" class="btn btn-secondary">Cerrar</button>

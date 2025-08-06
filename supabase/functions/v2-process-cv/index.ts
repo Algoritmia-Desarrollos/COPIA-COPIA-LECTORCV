@@ -8,6 +8,11 @@ import {
   HarmBlockThreshold,
 } from "https://esm.sh/@google/generative-ai";
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
 // Cliente de Supabase con permisos de administrador para poder escribir en la base de datos.
 const supabaseAdmin = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -113,6 +118,10 @@ async function processCV(cvText: string, jobRequirements: string) {
 }
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
   try {
     const { record } = await req.json();
     const {
@@ -193,10 +202,10 @@ serve(async (req) => {
     }
 
     return new Response(JSON.stringify({ success: true, data: updateData }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error) {
     console.error("Error en el servidor:", error);
-    return new Response(error.message, { status: 500 });
+    return new Response(error.message, { status: 500, headers: corsHeaders });
   }
 });

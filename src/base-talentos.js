@@ -42,11 +42,11 @@ const textModalTitle = document.getElementById('text-modal-title');
 const textModalBody = document.getElementById('text-modal-body');
 const textModalCloseBtn = document.getElementById('text-modal-close');
 
-// --- ESTADO GLOBAL CON PAGINACIÓN ---
+// --- ESTADO GLOBAL ---
 let carpetasCache = [];
 let currentFolderId = 'all';
 let currentPage = 1;
-const rowsPerPage = 50; // Puedes ajustar este número para cargar más o menos candidatos por página
+const rowsPerPage = 50;
 let totalCandidates = 0;
 let currentSearchTerm = '';
 
@@ -55,7 +55,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     await loadFolders();
     handleFolderClick('all', 'Todos los Candidatos', folderList.querySelector("[data-folder-id='all']"));
 
-    // Listener de búsqueda con "debounce" para no sobrecargar la BD
     let searchTimeout;
     filtroInput.addEventListener('input', () => {
         clearTimeout(searchTimeout);
@@ -63,14 +62,11 @@ window.addEventListener('DOMContentLoaded', async () => {
             currentPage = 1;
             currentSearchTerm = filtroInput.value;
             loadCandidates();
-        }, 500); // Espera 500ms después de que el usuario deja de teclear
+        }, 500);
     });
 
-    // Listeners de paginación
     tablePrevPageBtn.addEventListener('click', () => changePage(-1));
     tableNextPageBtn.addEventListener('click', () => changePage(1));
-
-    // Otros Listeners
     selectAllCheckbox.addEventListener('change', handleSelectAll);
     bulkMoveBtn.addEventListener('click', handleBulkMove);
     bulkDeleteBtn.addEventListener('click', handleBulkDelete);
@@ -95,26 +91,223 @@ async function loadFolders() {
 }
 
 function renderFoldersUI() {
-    folderList.innerHTML = '';
+    folderList.innerHTML = ''; // Limpiar la lista existente
+
+    // --- Renderizar carpetas estáticas ---
     ['Todos los Candidatos', 'Sin Carpeta'].forEach(name => {
         const id = name === 'Todos los Candidatos' ? 'all' : 'none';
         const icon = id === 'all' ? 'fa-inbox' : 'fa-folder-open';
         const li = document.createElement('li');
         li.innerHTML = `<div class="folder-item" data-folder-id="${id}"><i class="fa-solid ${icon}"></i> <span class="folder-name">${name}</span></div>`;
+        li.querySelector('.folder-item').addEventListener('click', (e) => handleFolderClick(id, name, e.currentTarget));
         folderList.appendChild(li);
     });
-    carpetasCache.forEach(folder => {
-        const li = document.createElement('li');
-        li.innerHTML = `<div class="folder-item" data-folder-id="${folder.id}"><i class="fa-solid fa-folder"></i> <span class="folder-name">${folder.nombre}</span></div>`;
-        folderList.appendChild(li);
+
+    // --- Renderizar carpetas dinámicas jerárquicamente ---
+    const carpetasPorId = new Map(carpetasCache.map(c => [c.id, { ...c, children: [] }]));
+    const carpetasRaiz = [];
+
+    carpetasCache.forEach(c => {
+        if (c.parent_id && carpetasPorId.has(c.parent_id)) {
+            carpetasPorId.get(c.parent_id).children.push(carpetasPorId.get(c.id));
+        } else {
+            carpetasRaiz.push(carpetasPorId.get(c.id));
+        }
     });
-    folderList.querySelectorAll('.folder-item').forEach(item => {
+
+    const createFolderTree = (carpetas, container, isSublevel = false) => {
+        const ul = document.createElement('ul');
+        ul.className = 'folder-subtree';
+        if (isSublevel) {
+            ul.classList.add('is-subfolder-container');
+        }
+
+        carpetas.forEach(folder => {
+            const li = document.createElement('li');
+            const hasChildren = folder.children.length > 0;
+            li.innerHTML = `
+                <div class="folder-item ${isSublevel ? 'is-subfolder' : ''}" data-folder-id="${folder.id}" draggable="true">
+                    <span class="folder-toggle">${hasChildren ? '<i class="fa-solid fa-chevron-right"></i>' : ''}</span>
+                    <i class="fa-solid fa-folder"></i> 
+                    <span class="folder-name">${folder.nombre}</span>
+                    <div class="folder-item-actions">
+                        <button class="btn-icon" data-action="edit-folder"><i class="fa-solid fa-pencil"></i></button>
+                        <button class="btn-icon" data-action="delete-folder"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                </div>
+            `;
+            if (hasChildren) {
+                createFolderTree(folder.children, li, true);
+                li.querySelector('.folder-toggle').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    li.classList.toggle('open');
+                });
+            }
+            li.querySelector('[data-action="edit-folder"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                editFolder(folder.id, folder.nombre);
+            });
+            li.querySelector('[data-action="delete-folder"]').addEventListener('click', (e) => {
+                e.stopPropagation();
+                deleteFolder(folder.id);
+            });
+            ul.appendChild(li);
+        });
+        container.appendChild(ul);
+    };
+
+    createFolderTree(carpetasRaiz, folderList, false);
+    addDragAndDropListeners();
+}
+
+function addDragAndDropListeners() {
+    folderList.querySelectorAll('.folder-item[draggable="true"]').forEach(item => {
         item.addEventListener('click', (e) => {
             const id = e.currentTarget.dataset.folderId;
             const name = e.currentTarget.querySelector('.folder-name').textContent;
             handleFolderClick(id, name, e.currentTarget);
         });
+
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('dragleave', handleDragLeave);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
     });
+}
+
+let draggedItemId = null;
+
+function handleDragStart(e) {
+    e.stopPropagation(); // Evitar que el evento se propague a elementos padres
+    const target = e.currentTarget;
+    
+    if (target.closest('.folder-item')) {
+        draggedItemId = target.dataset.folderId;
+        e.dataTransfer.setData('text/plain', `folder:${draggedItemId}`);
+    } else if (target.closest('tr[data-id]')) {
+        const candidateId = target.closest('tr[data-id]').dataset.id;
+        const selectedIds = getSelectedIds();
+        
+        // Si el elemento arrastrado no está seleccionado, arrastrar solo ese.
+        // Si está seleccionado, arrastrar todos los seleccionados.
+        const idsToDrag = selectedIds.includes(candidateId) ? selectedIds : [candidateId];
+        
+        draggedItemId = idsToDrag;
+        e.dataTransfer.setData('text/plain', `candidate:${idsToDrag.join(',')}`);
+    }
+    
+    e.dataTransfer.effectAllowed = 'move';
+    target.classList.add('dragging');
+}
+
+function handleDragOver(e) {
+    e.preventDefault();
+    const targetItem = e.currentTarget;
+    if (targetItem.dataset.folderId !== draggedItemId) {
+        targetItem.classList.add('drag-over');
+    }
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+async function handleDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const targetItem = e.currentTarget;
+    targetItem.classList.remove('drag-over');
+
+    const targetFolderId = targetItem.dataset.folderId;
+    const data = e.dataTransfer.getData('text/plain');
+
+    if (!data || !targetFolderId) return;
+
+    const [type, ids] = data.split(':');
+    
+    if (type === 'folder') {
+        // Lógica para mover carpeta a carpeta
+        const draggedFolderId = ids;
+        if (draggedFolderId && targetFolderId !== draggedFolderId) {
+            const { error } = await supabase.from('v2_carpetas').update({ parent_id: targetFolderId }).eq('id', draggedFolderId);
+            if (error) {
+                alert('Error al mover la carpeta.');
+            } else {
+                const draggedFolder = carpetasCache.find(c => c.id == draggedFolderId);
+                if (draggedFolder) draggedFolder.parent_id = parseInt(targetFolderId, 10);
+                renderFoldersUI();
+                populateFolderSelects();
+            }
+        }
+    } else if (type === 'candidate') {
+        // Lógica para mover candidato(s) a carpeta
+        const candidateIds = ids.split(',');
+        const newFolderId = targetFolderId === 'none' ? null : parseInt(targetFolderId, 10);
+        
+        if (candidateIds.length > 0) {
+            const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: newFolderId }).in('id', candidateIds);
+            if (error) {
+                alert(`Error al mover ${candidateIds.length > 1 ? 'los candidatos' : 'el candidato'}.`);
+            } else {
+                alert(`${candidateIds.length > 1 ? 'Candidatos movidos' : 'Candidato movido'} con éxito.`);
+                loadCandidates(); // Recargar para reflejar el cambio
+            }
+        }
+    }
+
+    draggedItemId = null;
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+}
+
+async function editFolder(id, currentName) {
+    const newName = prompt("Editar nombre de la carpeta:", currentName);
+    if (newName && newName.trim() !== "" && newName !== currentName) {
+        const { error } = await supabase
+            .from('v2_carpetas')
+            .update({ nombre: newName.trim() })
+            .eq('id', id);
+
+        if (error) {
+            alert("Error al actualizar la carpeta.");
+        } else {
+            await loadFolders();
+        }
+    }
+}
+
+async function deleteFolder(id) {
+    if (confirm("¿Estás seguro de que quieres eliminar esta carpeta? Los candidatos dentro no serán eliminados, pero quedarán sin carpeta.")) {
+        // Primero, desasociar todos los candidatos de esta carpeta
+        const { error: updateError } = await supabase
+            .from('v2_candidatos')
+            .update({ carpeta_id: null })
+            .eq('carpeta_id', id);
+
+        if (updateError) {
+            alert("Error al quitar candidatos de la carpeta.");
+            return;
+        }
+
+        // Luego, eliminar la carpeta
+        const { error: deleteError } = await supabase
+            .from('v2_carpetas')
+            .delete()
+            .eq('id', id);
+
+        if (deleteError) {
+            alert("Error al eliminar la carpeta.");
+        } else {
+            await loadFolders();
+            // Si la carpeta eliminada era la actual, volver a "Todos"
+            if (currentFolderId == id) {
+                handleFolderClick('all', 'Todos los Candidatos', folderList.querySelector("[data-folder-id='all']"));
+            }
+        }
+    }
 }
 
 function handleFolderClick(id, name, element) {
@@ -128,41 +321,51 @@ function handleFolderClick(id, name, element) {
     loadCandidates();
 }
 
-// --- LÓGICA DE CANDIDATOS CON PAGINACIÓN ---
+// --- LÓGICA DE CANDIDATOS CON PAGINACIÓN Y BÚSQUEDA CORREGIDA ---
 async function loadCandidates() {
     talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
-    
+
     const startIndex = (currentPage - 1) * rowsPerPage;
     const endIndex = startIndex + rowsPerPage - 1;
 
-    let query = supabase.from('v2_candidatos');
-    let countQuery = supabase.from('v2_candidatos');
+    // Construir la consulta base pidiendo el conteo total
+    let query = supabase
+        .from('v2_candidatos')
+        .select(`
+            id, 
+            nombre_candidato, 
+            email, 
+            telefono, 
+            nombre_archivo_general, 
+            v2_carpetas(nombre)
+        `, { count: 'exact' });
 
+    // Aplicar filtro de carpeta
     if (currentFolderId === 'none') {
         query = query.is('carpeta_id', null);
-        countQuery = countQuery.is('carpeta_id', null);
     } else if (currentFolderId !== 'all') {
         query = query.eq('carpeta_id', currentFolderId);
-        countQuery = countQuery.eq('carpeta_id', currentFolderId);
     }
 
+    // Aplicar filtro de búsqueda
     if (currentSearchTerm) {
         const searchTerm = `%${currentSearchTerm}%`;
-        query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
-        countQuery = countQuery.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
+        const orFilter = `nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`;
+        query = query.or(orFilter);
     }
 
-    const [{ data, error }, { count, error: countError }] = await Promise.all([
-        query.select(`id, nombre_candidato, email, telefono, nombre_archivo_general, v2_carpetas(nombre)`).range(startIndex, endIndex).order('updated_at', { ascending: false }),
-        countQuery.select('*', { count: 'exact', head: true })
-    ]);
+    // Aplicar paginación y orden después de los filtros
+    query = query.range(startIndex, endIndex).order('updated_at', { ascending: false });
 
-    if (error || countError) {
-        console.error("Error al cargar candidatos:", error || countError);
+    // Ejecutar la consulta una sola vez
+    const { data, error, count } = await query;
+
+    if (error) {
+        console.error("Error al cargar candidatos:", error);
         talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Error al cargar datos.</td></tr>`;
         return;
     }
-    
+
     totalCandidates = count;
     renderTable(data);
     setupPagination();
@@ -187,14 +390,18 @@ function renderTable(candidatos) {
     candidatos.forEach(candidato => {
         const row = document.createElement('tr');
         row.dataset.id = candidato.id;
+        
         row.innerHTML = `
             <td><input type="checkbox" class="candidate-checkbox" data-id="${candidato.id}"></td>
-            <td class="candidate-name-cell">
-                <span class="candidate-name">${candidato.nombre_candidato || 'No extraído'}</span>
-                <span class="candidate-filename">${candidato.nombre_archivo_general || 'No Identificado'}</span>
+            <td>
+                <div class="candidate-name">${candidato.nombre_candidato || 'No extraído'}</div>
+                <div class="candidate-filename">${candidato.nombre_archivo_general || 'No Identificado'}</div>
             </td>
             <td>${candidato.v2_carpetas?.nombre || '<em>Sin Carpeta</em>'}</td>
-            <td><div style="white-space: normal;">${candidato.email || ''}</div><div class="text-light">${candidato.telefono || ''}</div></td>
+            <td>
+                <div style="white-space: normal;">${candidato.email || ''}</div>
+                <div class="text-light">${candidato.telefono || ''}</div>
+            </td>
             <td class="actions-group" style="text-align: right;">
                 <button class="btn btn-secondary btn-sm" data-action="view-text" title="Ver Texto del CV"><i class="fa-solid fa-file-lines"></i></button>
                 <button class="btn btn-primary btn-sm" data-action="view-cv" title="Ver CV Original"><i class="fa-solid fa-download"></i></button>
@@ -215,20 +422,26 @@ function setupPagination() {
 }
 
 function addTableRowListeners(row) {
+    row.draggable = true;
+    row.addEventListener('dragstart', handleDragStart);
+    row.addEventListener('dragend', handleDragEnd);
+
     row.addEventListener('click', (e) => {
-        if (e.target.closest('button')) return;
+        if (e.target.closest('button') || e.target.closest('a')) return;
         const checkbox = row.querySelector('.candidate-checkbox');
-        checkbox.checked = !checkbox.checked;
-        updateBulkActionsVisibility();
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            updateBulkActionsVisibility();
+        }
     });
-    row.querySelector('.candidate-checkbox').addEventListener('change', updateBulkActionsVisibility);
-    const viewCvBtn = row.querySelector('[data-action="view-cv"]');
-    viewCvBtn.addEventListener('click', (e) => { e.stopPropagation(); openCvPdf(row.dataset.id, viewCvBtn); });
-    row.querySelector('[data-action="view-text"]').addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
-    row.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
+
+    row.querySelector('.candidate-checkbox')?.addEventListener('change', updateBulkActionsVisibility);
+    row.querySelector('[data-action="view-cv"]')?.addEventListener('click', (e) => { e.stopPropagation(); openCvPdf(row.dataset.id, e.currentTarget); });
+    row.querySelector('[data-action="view-text"]')?.addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
+    row.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
 }
 
-// --- ACCIONES EN LOTE Y FORMULARIOS ---
+// --- ACCIONES EN LOTE Y MODALES ---
 function getSelectedIds() { return Array.from(talentosListBody.querySelectorAll('.candidate-checkbox:checked')).map(cb => cb.dataset.id); }
 function updateBulkActionsVisibility() { bulkActionsContainer.classList.toggle('hidden', getSelectedIds().length === 0); }
 function handleSelectAll() {
@@ -266,8 +479,6 @@ function populateFolderSelects() {
         moveToFolderSelect.innerHTML += opt;
     });
 }
-
-// --- MODALES ---
 async function openCvPdf(id, buttonElement) {
     const originalHTML = buttonElement.innerHTML;
     buttonElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
@@ -294,7 +505,6 @@ async function openTextModal(id) {
     textModalContainer.classList.remove('hidden');
 }
 function closeTextModal() { textModalContainer.classList.add('hidden'); }
-
 async function openEditModal(id) {
     const { data, error } = await supabase.from('v2_candidatos').select('id, nombre_candidato, email, telefono').eq('id', id).single();
     if (error || !data) { alert('No se pudo cargar el candidato.'); return; }

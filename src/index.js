@@ -96,8 +96,10 @@ cvForm.addEventListener('submit', async (e) => {
 async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArchivo, avisoId) {
     let nombreFormateado = toTitleCase(iaData.nombreCompleto);
     
+    // Si la IA no extrae un nombre, creamos uno único y corto.
     if (!nombreFormateado) {
-        nombreFormateado = `Candidato No Identificado ${Date.now()}`;
+        const shortId = Date.now().toString().slice(-4);
+        nombreFormateado = `N/A ${shortId}`;
     }
 
     const { data: candidato, error: upsertError } = await supabase
@@ -130,7 +132,6 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
 
     if (postulaError) {
       if (postulaError.code === '23505') {
-        // En lugar de una alerta, podemos simplemente registrarlo o no hacer nada.
         console.warn('El candidato ya se había postulado a este aviso. Su perfil ha sido actualizado.');
       } else {
         throw new Error(`Error al guardar la postulación: ${postulaError.message}`);
@@ -186,7 +187,6 @@ async function extraerDatosConIA(textoCV) {
         return JSON.parse(data.message);
     } catch (e) {
         console.error("Error al contactar o parsear la respuesta de la IA:", e);
-        // Devolvemos un objeto vacío para que el flujo principal no se detenga.
         return { nombreCompleto: null, email: null, telefono: null };
     }
 }

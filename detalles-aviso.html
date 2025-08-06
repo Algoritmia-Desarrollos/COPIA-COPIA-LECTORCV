@@ -29,6 +29,7 @@
       <div class="dashboard-header">
         <h1 id="aviso-titulo">Cargando detalles...</h1>
         <div class="actions-group">
+          <button id="edit-aviso-btn" class="btn btn-primary"><i class="fa-solid fa-pencil"></i> Editar Aviso</button>
           <button id="delete-aviso-btn" class="btn btn-danger"><i class="fa-solid fa-trash"></i> Eliminar Aviso</button>
           <a href="lista-avisos.html" class="btn btn-secondary">
             <i class="fa-solid fa-arrow-left"></i> Volver
@@ -39,6 +40,20 @@
       <div class="details-grid" style="display: grid; grid-template-columns: 2fr 1fr; gap: 2rem; align-items: flex-start;">
         
         <div class="details-main">
+          <div class="panel-container" id="postulantes-panel">
+            <div class="panel-header">
+              <h2 id="postulantes-header">Candidatos Postulados</h2>
+              <a href="#" id="ver-postulados-btn" class="btn btn-secondary"><i class="fa-solid fa-users"></i> Ver Postulados</a>
+            </div>
+            <div class="actions-group" style="margin-top: 1rem; margin-bottom: 1rem;">
+              <button id="add-from-db-btn" class="btn btn-primary"><i class="fa-solid fa-folder-plus"></i> Agregar desde Base</button>
+              <button id="add-from-aviso-btn" class="btn btn-secondary"><i class="fa-solid fa-file-import"></i> Agregar desde Aviso</button>
+            </div>
+            <div id="postulantes-list-container">
+              
+            </div>
+          </div>
+
           <div class="panel-container">
             <div class="details-section">
               <h3>Descripción del Puesto</h3>
@@ -68,9 +83,9 @@
                 <i class="fa-solid fa-copy"></i>
               </button>
             </div>
-            <a id="abrir-link-btn" href="#" target="_blank" class="btn btn-primary" style="width: 100%; margin-top: 0.75rem; justify-content: center;">
+            <a id="abrir-link-btn" href="#" target="_blank" class="btn btn-primary" style="margin-top: 0.75rem; justify-content: center;">
               <i class="fa-solid fa-arrow-up-right-from-square"></i>
-              Probar Link
+              Abrir Link
             </a>
           </div>
           <div class="panel-container" style="margin-top: 1.5rem;">
@@ -91,5 +106,85 @@
     });
   </script>
   <script type="module" src="src/detalles-aviso.js"></script>
+
+  <!-- Modal para Editar Aviso -->
+  <div id="modal-edit-aviso" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>Editar Aviso</h2>
+        <button class="modal-close-btn" data-modal-id="modal-edit-aviso">&times;</button>
+      </div>
+      <div class="modal-content">
+        <form id="edit-aviso-form">
+          <div class="form-group">
+            <label for="edit-descripcion">Descripción del Puesto</label>
+            <textarea id="edit-descripcion" class="form-control" rows="5"></textarea>
+          </div>
+          <div class="form-group">
+            <label>Condiciones Necesarias (Excluyentes)</label>
+            <div class="condition-input-group">
+              <input type="text" id="edit-necesaria-input" class="form-control" placeholder="Añadir condición...">
+              <button type="button" id="add-necesaria-btn-edit" class="btn btn-primary add-btn">+</button>
+            </div>
+            <ul id="necesarias-list-edit" class="condition-list"></ul>
+          </div>
+          <div class="form-group">
+            <label>Condiciones Deseables (Suman Puntos)</label>
+            <div class="condition-input-group">
+              <input type="text" id="edit-deseable-input" class="form-control" placeholder="Añadir condición...">
+              <button type="button" id="add-deseable-btn-edit" class="btn btn-primary add-btn">+</button>
+            </div>
+            <ul id="deseables-list-edit" class="condition-list"></ul>
+          </div>
+          <div class="form-group">
+            <label for="edit-max-cv">Máximo de CVs (0 para ilimitado)</label>
+            <input type="number" id="edit-max-cv" class="form-control" min="0">
+          </div>
+          <div class="form-group">
+            <label for="edit-valido-hasta">Válido Hasta</label>
+            <input type="date" id="edit-valido-hasta" class="form-control">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary modal-close-btn" data-modal-id="modal-edit-aviso">Cancelar</button>
+        <button id="confirm-edit-aviso-btn" class="btn btn-primary">Guardar Cambios</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modals -->
+  <div id="modal-add-from-db" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>Agregar Candidatos desde la Base</h2>
+        <button class="modal-close-btn" data-modal-id="modal-add-from-db">&times;</button>
+      </div>
+      <div class="modal-content" id="db-modal-content">
+        <p>Cargando carpetas...</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary modal-close-btn" data-modal-id="modal-add-from-db">Cancelar</button>
+        <button id="confirm-add-from-db" class="btn btn-primary">Agregar Seleccionados</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-add-from-aviso" class="modal-overlay" style="display: none;">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h2>Agregar Candidatos desde otro Aviso</h2>
+        <button class="modal-close-btn" data-modal-id="modal-add-from-aviso">&times;</button>
+      </div>
+      <div class="modal-content" id="aviso-modal-content">
+        <p>Cargando avisos...</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary modal-close-btn" data-modal-id="modal-add-from-aviso">Cancelar</button>
+        <button id="confirm-add-from-aviso" class="btn btn-primary">Agregar Seleccionados</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
