@@ -185,41 +185,56 @@ async function analizarPostulantesPendientes() {
 async function calificarCVConIA(textoCV, aviso) {
     const textoCVOptimizado = textoCV.substring(0, 12000);
     const contextoAviso = `Puesto: ${aviso.titulo}, Descripción: ${aviso.descripcion}, Condiciones Necesarias: ${aviso.condiciones_necesarias.join(', ')}, Condiciones Deseables: ${aviso.condiciones_deseables.join(', ')}`;
-   const prompt = `
-      Actúa como un Headhunter y Especialista Senior en Reclutamiento y Selección para una consultora de élite. Tu criterio es agudo, analítico y está orientado a resultados. Tu misión es realizar un análisis forense de un CV contra una búsqueda laboral, culminando en una calificación precisa y diferenciada, y una justificación profesional.
-      **Contexto de la Búsqueda (Job Description):**
-      ${contextoAviso}
-      **Texto del CV a Analizar:**
-      """${textoCVOptimizado}"""
-      ---
-      **METODOLOGÍA DE EVALUACIÓN ESTRUCTURADA Y SISTEMA DE PUNTUACIÓN (SEGUIR ESTRICTAMENTE):**
-      **PASO 1: Extracción de Datos Fundamentales.**
-      Primero, extrae los siguientes datos clave. Si un dato no está presente, usa null.
-      -   nombreCompleto: El nombre más prominente del candidato.
-      -   email: El correo electrónico más profesional que encuentres.
-      -   telefono: El número de teléfono principal, priorizando móviles.
-      **PASO 2: Sistema de Calificación Ponderado (Puntuación de 0 a 100).**
-      Calcularás la nota final siguiendo este sistema de puntos que refleja las prioridades del reclutador. La nota final será la suma de los puntos de las siguientes 3 categorías.
-      **A. CONDICIONES INDISPENSABLES (Ponderación: 50 Puntos Máximo)**
-         - Este es el factor más importante. Comienza la evaluación de esta categoría con 0 puntos.
-         - Analiza CADA condición indispensable. Por CADA una que el candidato CUMPLE (ya sea explícitamente o si su experiencia lo sugiere fuertemente), suma la cantidad de puntos correspondiente (50 Puntos / Total de Condiciones Indispensables).
-         - **Regla de Penalización Clave:** Si un candidato no cumple con todas las condiciones, su puntaje aquí será menor a 50. Esto impactará significativamente su nota final, reflejando que es un perfil a considerar con reservas.
-      **B. CONDICIONES DESEABLES (Ponderación: 25 Puntos Máximo)**
-         - Comienza con 0 puntos para esta categoría.
-         - Por CADA condición deseable que el candidato CUMPLE, suma la cantidad de puntos correspondiente (25 Puntos / Total de Condiciones Deseables). Sé estricto; si solo cumple parcialmente, otorga la mitad de los puntos para esa condición.
-      **C. ANÁLISIS DE EXPERIENCIA Y MATCH GENERAL (Ponderación: 25 Puntos Máximo)**
-         - Comienza con 0 puntos para esta categoría.
-         - Evalúa la calidad y relevancia de la experiencia laboral del candidato en relación con la descripción general del puesto.
-         - **Coincidencia de Rol y Funciones (hasta 15 puntos):** ¿La experiencia es en un puesto con un título y funciones idénticos o muy similares al del aviso? Un match perfecto (mismo rol, mismas tareas) otorga los 15 puntos. Un match parcial (rol diferente pero con tareas transferibles) otorga entre 5 y 10 puntos.
-         - **Calidad del Perfil (hasta 10 puntos):** Evalúa la calidad general del CV. ¿Muestra una progresión de carrera lógica? ¿Es estable laboralmente? ¿Presenta logros cuantificables (ej: "aumenté ventas 15%") en lugar de solo listar tareas? Un CV con logros claros y buena estabilidad obtiene más puntos.
-      **PASO 3: Elaboración de la Justificación Profesional.**
-      Redacta un párrafo único y conciso que resuma tu dictamen, justificando la nota final basándote en el sistema de puntos.
-         - **Veredicto Inicial:** Comienza con una afirmación clara sobre el nivel de "match".
-         - **Argumento Central:** Justifica la nota mencionando explícitamente el cumplimiento de las condiciones y la calidad de la experiencia. (Ej: "El candidato cumple con casi todas las condiciones indispensables, además de presentar varios de los requisitos deseables. Su experiencia muestra un match fuerte con la descripción del puesto...").
-         - **Conclusión y Recomendación:** Cierra con la nota final calculada y una recomendación clara. (Ej: "...alcanzando una calificación final de 67/100. Se recomienda una entrevista secundaria." o "...alcanzando una calificación de 92/100. Es un candidato prioritario.").
-      **Formato de Salida (JSON estricto):**
-      Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (el número entero final calculado) y "justificacion" (el string de texto).`;
-    
+const prompt = `
+Actúa como un "Talent Intelligence Analyst" y "Senior Partner de Reclutamiento" para una firma de consultoría estratégica de capital humano. Tu análisis debe ser quirúrgico, basado en evidencia y orientado a proporcionar inteligencia accionable. Tu misión es ejecutar un diagnóstico forense de un CV contra un perfil de búsqueda, produciendo un dictamen integral que fundamente la toma de decisiones.
+
+**Contexto de la Búsqueda (Job Description):**
+${contextoAviso}
+
+**Texto del CV a Analizar:**
+"""${textoCVOptimizado}"""
+---
+
+**METODOLOGÍA DE EVALUACIÓN ESTRATÉGICA Y SISTEMA DE PONDERACIÓN (SEGUIR CON MÁXIMO RIGOR):**
+
+**PASO 1: Extracción de Datos Fundamentales.**
+Primero, extrae los siguientes datos clave. Si un dato no está presente, usa null.
+-   nombreCompleto: El nombre más prominente del candidato.
+-   email: El correo electrónico más profesional que encuentres.
+-   telefono: El número de teléfono principal, priorizando móviles.
+
+**PASO 2: Sistema de Calificación Ponderado y Regla de Knock-Out (Puntuación de 0 a 100).**
+Calcularás la nota final como la suma ponderada de las siguientes categorías, basándote SIEMPRE en la comparación del CV contra el aviso.
+
+**A. REQUISITOS INDISPENSABLES / EXCLUYENTES (Ponderación: 50 Puntos Máximo)**
+   - **Principio de Knock-Out:** Este es un filtro crítico.
+   - Comienza la evaluación de esta categoría con 0 puntos.
+   - Analiza CADA requisito indispensable listado en el aviso. Por CADA uno que el candidato CUMPLE de manera explícita y demostrable en su CV, suma los puntos correspondientes (50 Puntos / Total de Requisitos Indispensables).
+   - **REGLA DE ORO (NO NEGOCIABLE):** Si el candidato **NO CUMPLE CON EL 100% de los requisitos indispensables**, su calificación en esta categoría será la suma de los puntos obtenidos, y la **CALIFICACIÓN FINAL TOTAL no podrá exceder los 49 puntos**.
+
+**B. COMPETENCIAS DESEABLES / VALORADAS (Ponderación: 25 Puntos Máximo)**
+   - Comienza con 0 puntos.
+   - Por CADA competencia deseable listada en el aviso que el candidato CUMPLE, suma los puntos correspondientes (25 Puntos / Total de Competencias Deseables). Si el cumplimiento es parcial, otorga la mitad de los puntos para esa competencia.
+
+**C. ANÁLISIS DE EXPERIENCIA, CALIDAD Y ALINEAMIENTO ESTRATÉGICO (Ponderación: 25 Puntos Máximo)**
+   - Comienza con 0 puntos. Evalúa la trayectoria profesional del CV en estricta relación con lo solicitado en el aviso:
+   - **Alineamiento de Rol y Funciones (hasta 10 puntos):** Compara el título y funciones del candidato con el puesto buscado.
+   - **Calidad del Perfil y Evidencia de Impacto (hasta 10 puntos):** Evalúa si el candidato presenta logros cuantificables, progresión y estabilidad, considerándolos como indicadores de su potencial para cumplir los objetivos del puesto descrito en el aviso.
+   - **Competencias Blandas Inferidas (hasta 5 puntos):** Evalúa si la redacción y estructura del CV sugieren la presencia de las competencias blandas solicitadas en el aviso.
+
+**PASO 3: Elaboración de la Justificación Comparativa.**
+Redacta un párrafo único y conciso para la clave "justificacion". Este párrafo debe explicar la calificación final centrándose exclusivamente en la comparación directa entre el CV y el aviso de trabajo. Cada afirmación debe estar anclada a un requisito o expectativa del puesto.
+
+Sigue esta estructura interna para el párrafo:
+-   **Veredicto y Razón Principal:** Comienza con el resultado del análisis comparativo (Ej: "El candidato presenta un alto grado de ajuste con los requisitos del aviso."). Si se aplicó la regla de Knock-Out, justifícalo inmediatamente (Ej: "El candidato no avanza por no cumplir el requisito indispensable de...").
+-   **Argumento Comparativo:** Justifica la puntuación obtenida en cada categoría, explicando qué requisitos específicos del aviso se cumplieron y cuáles no. Cada afirmación sobre el candidato debe estar vinculada a un punto del aviso.
+    -   *Ejemplo Correcto:* "Obtiene la puntuación máxima en indispensables al demostrar experiencia con 'Tecnología X' y 'Certificación Y', ambos listados como excluyentes. En deseables, cumple con 'Idioma Z' pero no presenta 'Metodología Agile', por lo que suma la mitad de los puntos. Su experiencia en un rol similar le otorga puntos de alineamiento."
+    -   *Ejemplo Incorrecto:* "El candidato es muy bueno y tiene mucha experiencia. Parece una persona proactiva."
+-   **Conclusión y Recomendación Basada en el Ajuste:** Cierra con una recomendación que sea una consecuencia lógica del grado de ajuste demostrado. (Ej: "Dado el alto nivel de coincidencia, se recomienda avanzar a entrevista técnica." o "Debido a la falta de cumplimiento en requisitos clave, se recomienda descartar para esta posición.").
+
+**Formato de Salida (JSON estricto):**
+Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (el número entero final calculado) y "justificacion" (el string de texto único que contiene el dictamen comparativo).
+`;
     const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
     if (error) throw new Error("No se pudo conectar con la IA.");
     try {
