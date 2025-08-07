@@ -378,6 +378,7 @@ a:hover { color: var(--primary-hover); }
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background-color 0.2s;
+  white-space: nowrap;
 }
 .folder-list .folder-item:hover { background-color: var(--bg-light); }
 .folder-list + .folder-actions {
@@ -697,3 +698,117 @@ li.open > .folder-item .folder-toggle {
 .carpeta-group label {
   cursor: pointer;
 }
+
+/* --- 8. ESTILOS PARA CARGA MASIVA --- */
+
+.share-section {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.link-group {
+    display: flex;
+    flex-grow: 1;
+}
+
+.link-group input {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    min-width: 250px;
+}
+
+.link-group .btn {
+    border-radius: 0;
+    border-left: 0;
+}
+
+.link-group .btn:last-child {
+    border-top-right-radius: var(--radius-md);
+    border-bottom-right-radius: var(--radius-md);
+}
+
+.qr-code {
+    padding: 0.5rem;
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    line-height: 0;
+}
+
+.upload-queue-list {
+    list-style: none;
+    padding: 0;
+    margin: 1rem 0 0 0;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.queue-item, .queue-item-empty {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    background-color: var(--bg-white);
+    border-bottom: 1px solid var(--border-color);
+    transition: background-color 0.3s ease;
+}
+
+.upload-queue-list li:last-child {
+    border-bottom: none;
+}
+
+.queue-item-empty {
+    color: var(--text-light);
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.queue-item .status-icon {
+    font-size: 1.25rem;
+    width: 20px;
+    text-align: center;
+}
+
+.queue-item .file-details {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.queue-item .file-name {
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.queue-item .error-message {
+    font-size: 0.8rem;
+    color: var(--danger-color);
+    margin-top: 0.25rem;
+}
+
+.queue-item .status-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Colores de estado */
+.queue-item.status-pendiente .status-icon { color: var(--text-light); }
+.queue-item.status-pendiente .status-badge { background-color: #f1f5f9; color: #64748b; }
+
+.queue-item.status-procesando .status-icon { color: var(--primary-color); }
+.queue-item.status-procesando .status-badge { background-color: #e0e7ff; color: #4338ca; }
+
+.queue-item.status-exito { background-color: #f0fdf4; }
+.queue-item.status-exito .status-icon { color: var(--success-color); }
+.queue-item.status-exito .status-badge { background-color: #dcfce7; color: #15803d; }
+
+.queue-item.status-error { background-color: #fef2f2; }
+.queue-item.status-error .status-icon { color: var(--danger-color); }
+.queue-item.status-error .status-badge { background-color: #fee2e2; color: #b91c1c; }

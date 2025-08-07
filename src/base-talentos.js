@@ -9,6 +9,7 @@ const folderTitle = document.getElementById('folder-title');
 const talentosListBody = document.getElementById('talentos-list-body');
 const filtroInput = document.getElementById('filtro-candidatos');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
+const sortSelect = document.getElementById('sort-select');
 
 // Paginación
 const tablePagination = document.getElementById('table-pagination');
@@ -47,6 +48,8 @@ let currentPage = 1;
 const rowsPerPage = 100;
 let totalCandidates = 0;
 let currentSearchTerm = '';
+let currentSort = { column: 'created_at', ascending: false };
+let isUnreadFilterActive = false;
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
@@ -61,6 +64,19 @@ window.addEventListener('DOMContentLoaded', async () => {
             currentSearchTerm = filtroInput.value;
             loadCandidates();
         }, 500);
+    });
+
+    sortSelect.addEventListener('change', () => {
+        const value = sortSelect.value;
+        if (value === 'unread') {
+            isUnreadFilterActive = true;
+        } else {
+            isUnreadFilterActive = false;
+            const [column, order] = value.split('-');
+            currentSort = { column, ascending: order === 'asc' };
+        }
+        currentPage = 1;
+        loadCandidates();
     });
 
     tablePrevPageBtn.addEventListener('click', () => changePage(-1));
@@ -104,8 +120,21 @@ function renderFoldersUI(counts = {}) {
         const icon = id === 'all' ? 'fa-inbox' : 'fa-folder-open';
         const count = counts[id] || 0;
         const li = document.createElement('li');
-        li.innerHTML = `<div class="folder-item" data-folder-id="${id}"><i class="fa-solid ${icon}"></i> <span class="folder-name">${name}</span> <span class="folder-count">(${count})</span></div>`;
-        li.querySelector('.folder-item').addEventListener('click', (e) => handleFolderClick(id, name, e.currentTarget));
+        const folderItem = document.createElement('div');
+        folderItem.className = 'folder-item';
+        folderItem.dataset.folderId = id;
+        folderItem.innerHTML = `<i class="fa-solid ${icon}"></i> <span class="folder-name">${name}</span> <span class="folder-count">(${count})</span>`;
+        
+        folderItem.addEventListener('click', (e) => handleFolderClick(id, name, e.currentTarget));
+        
+        // Hacer que "Sin Carpeta" sea un destino para soltar
+        if (id === 'none') {
+            folderItem.addEventListener('dragover', handleDragOver);
+            folderItem.addEventListener('dragleave', handleDragLeave);
+            folderItem.addEventListener('drop', handleDrop);
+        }
+
+        li.appendChild(folderItem);
         folderList.appendChild(li);
     });
 
@@ -260,6 +289,7 @@ async function handleDrop(e) {
             } else {
                 alert(`${candidateIds.length > 1 ? 'Candidatos movidos' : 'Candidato movido'} con éxito.`);
                 loadCandidates(); // Recargar para reflejar el cambio
+                loadFolders();
             }
         }
     }
@@ -362,8 +392,13 @@ async function loadCandidates() {
         query = query.or(orFilter);
     }
 
+    // Aplicar filtro especial para "No leídos"
+    if (isUnreadFilterActive) {
+        query = query.like('nombre_candidato', 'Candidato No Identificado%');
+    }
+
     // Aplicar paginación y orden después de los filtros
-    query = query.range(startIndex, endIndex).order('updated_at', { ascending: false });
+    query = query.range(startIndex, endIndex).order(currentSort.column, { ascending: currentSort.ascending });
 
     // Ejecutar la consulta una sola vez
     const { data, error, count } = await query;
@@ -465,7 +500,7 @@ async function handleBulkMove() {
     const targetFolderId = moveToFolderSelect.value === 'none' ? null : parseInt(moveToFolderSelect.value, 10);
     if (ids.length === 0 || moveToFolderSelect.value === "") return;
     const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: targetFolderId }).in('id', ids);
-    if (error) { alert("Error al mover."); } else { alert("Movidos con éxito."); loadCandidates(); }
+    if (error) { alert("Error al mover."); } else { alert("Movidos con éxito."); loadCandidates(); loadFolders();}
 }
 async function handleBulkDelete() {
     const ids = getSelectedIds();

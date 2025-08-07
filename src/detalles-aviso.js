@@ -173,102 +173,101 @@ verPostuladosBtn.addEventListener('click', (e) => {
     }
 });
 
-// --- LÓGICA DE MODALES PARA AÑADIR CANDIDATOS ---
-addFromDbBtn.addEventListener('click', async () => {
-    showModal('modal-add-from-db');
-    dbModalContent.innerHTML = '<p>Cargando carpetas...</p>';
-    const { data: carpetas, error } = await supabase.from('v2_carpetas').select('id, nombre').order('nombre');
-    if (error) {
-        dbModalContent.innerHTML = '<p class="text-danger">Error al cargar las carpetas.</p>';
-        return;
-    }
-    let html = `<select id="db-folder-select" class="form-control"><option value="">Selecciona una carpeta...</option><option value="all">Todos los Candidatos</option>${carpetas.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}</select><div id="candidates-from-folder-container" style="margin-top: 1rem;"></div>`;
-    dbModalContent.innerHTML = html;
+// --- LÓGICA DE MODALES PARA AÑADIR CANDIDATOS (REFACTORIZADA) ---
 
-    document.getElementById('db-folder-select').addEventListener('change', async (e) => {
-        const folderId = e.target.value;
-        const container = document.getElementById('candidates-from-folder-container');
-        if (!folderId) {
-            container.innerHTML = '';
-            updateModalFooter(dbModalContent, dbModalFooter, 'db');
+// Función genérica para manejar la apertura y lógica de los modales
+async function setupModal(modal, contentEl, footerEl, type) {
+    showModal(modal.id);
+    contentEl.innerHTML = '<p>Cargando...</p>';
+    footerEl.innerHTML = ''; // Limpiar footer
+
+    let items; // 'avisos' o 'carpetas'
+    if (type === 'aviso') {
+        const { data, error } = await supabase.from('v2_avisos').select('id, titulo').neq('id', currentAvisoId);
+        if (error) { contentEl.innerHTML = '<p class="text-danger">Error al cargar avisos.</p>'; return; }
+        items = data;
+    } else { // db
+        const { data, error } = await supabase.from('v2_carpetas').select('id, nombre').order('nombre');
+        if (error) { contentEl.innerHTML = '<p class="text-danger">Error al cargar carpetas.</p>'; return; }
+        items = data;
+    }
+
+    const selectLabel = type === 'aviso' ? 'un aviso' : 'una carpeta';
+    const allOption = type === 'db' ? '<option value="all">Todos los Candidatos</option>' : '';
+    contentEl.innerHTML = `
+        <select id="modal-select-${type}" class="form-control">
+            <option value="">Selecciona ${selectLabel}...</option>
+            ${allOption}
+            ${items.map(item => `<option value="${item.id}">${item.titulo || item.nombre}</option>`).join('')}
+        </select>
+        <div id="modal-candidates-container-${type}" style="margin-top: 1rem;"></div>`;
+
+    const selectEl = document.getElementById(`modal-select-${type}`);
+    const candidatesContainer = document.getElementById(`modal-candidates-container-${type}`);
+
+    selectEl.addEventListener('change', async () => {
+        const selectedId = selectEl.value;
+        if (!selectedId) {
+            candidatesContainer.innerHTML = '';
+            updateModalFooter(contentEl, footerEl, type);
             return;
         }
-        container.innerHTML = '<p>Cargando candidatos...</p>';
+        candidatesContainer.innerHTML = '<p>Cargando candidatos...</p>';
         
-        let query = supabase.from('v2_candidatos').select('id, nombre_candidato');
-        if (folderId !== 'all') {
-            query = query.eq('carpeta_id', folderId);
+        let query;
+        if (type === 'aviso') {
+            query = supabase.from('v2_postulaciones').select('v2_candidatos(id, nombre_candidato)').eq('aviso_id', selectedId);
+        } else { // db
+            query = supabase.from('v2_candidatos').select('id, nombre_candidato');
+            if (selectedId !== 'all') {
+                query = query.eq('carpeta_id', selectedId);
+            }
         }
-
-        const { data: candidatos, error: candError } = await query.order('nombre_candidato');
-
-        if (candError) { container.innerHTML = '<p class="text-danger">Error al cargar candidatos.</p>'; return; }
-        if (candidatos.length === 0) { container.innerHTML = '<p>No se encontraron candidatos.</p>'; return; }
         
-        let candHtml = `
-            <div class="carpeta-header">
-                <h4>Candidatos</h4>
-                <label class="select-all-folder-label">
-                    <input type="checkbox" class="select-all-modal-cb"> Seleccionar Todos
-                </label>
-            </div>
-            <ul class="candidate-list-modal">
-                ${candidatos.map(c => `<li><label><input type="checkbox" class="candidato-checkbox-db" value="${c.id}"> ${c.nombre_candidato}</label></li>`).join('')}
-            </ul>`;
-        container.innerHTML = candHtml;
-        updateModalFooter(dbModalContent, dbModalFooter, 'db');
-    });
+        const { data, error } = await query;
+        if (error) { candidatesContainer.innerHTML = '<p class="text-danger">Error al cargar candidatos.</p>'; return; }
 
-    dbModalContent.addEventListener('change', () => updateModalFooter(dbModalContent, dbModalFooter, 'db'));
-    updateModalFooter(dbModalContent, dbModalFooter, 'db');
-});
+        const candidatos = (type === 'aviso' ? data.map(p => p.v2_candidatos).filter(Boolean) : data)
+                           .sort((a, b) => a.nombre_candidato.localeCompare(b.nombre_candidato));
 
-addFromAvisoBtn.addEventListener('click', async () => {
-    showModal('modal-add-from-aviso');
-    avisoModalContent.innerHTML = '<p>Cargando otros avisos...</p>';
-    const { data: avisos, error } = await supabase.from('v2_avisos').select('id, titulo').neq('id', currentAvisoId);
-    if (error) {
-        avisoModalContent.innerHTML = '<p class="text-danger">Error al cargar los avisos.</p>';
-        return;
-    }
-    let html = `<select id="aviso-select" class="form-control"><option value="">Selecciona un aviso...</option>${avisos.map(a => `<option value="${a.id}">${a.titulo}</option>`).join('')}</select><div id="candidatos-from-aviso-container" style="margin-top: 1rem;"></div>`;
-    avisoModalContent.innerHTML = html;
-
-    document.getElementById('aviso-select').addEventListener('change', async (e) => {
-        const selectedAvisoId = e.target.value;
-        const container = document.getElementById('candidatos-from-aviso-container');
-        if (!selectedAvisoId) {
-            container.innerHTML = '';
-            updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso');
-            return;
-        }
-        container.innerHTML = '<p>Cargando candidatos...</p>';
-        const { data, error: postError } = await supabase.from('v2_postulaciones').select('v2_candidatos(id, nombre_candidato)').eq('aviso_id', selectedAvisoId);
-        if (postError) { container.innerHTML = '<p class="text-danger">Error al cargar candidatos.</p>'; return; }
-        
-        const candidatosPostulados = data.map(p => p.v2_candidatos).filter(Boolean);
-        candidatosPostulados.sort((a, b) => a.nombre_candidato.localeCompare(b.nombre_candidato));
-
-        if (candidatosPostulados.length > 0) {
-            let candHtml = `
+        if (candidatos.length > 0) {
+            candidatesContainer.innerHTML = `
                 <div class="carpeta-header">
                     <h4>Candidatos</h4>
-                    <label class="select-all-folder-label">
-                        <input type="checkbox" class="select-all-modal-cb"> Seleccionar Todos
-                    </label>
+                    <label class="select-all-folder-label"><input type="checkbox" class="select-all-modal-cb"> Seleccionar Todos</label>
                 </div>
                 <ul class="candidate-list-modal">
-                    ${candidatosPostulados.map(c => `<li><label><input type="checkbox" class="candidato-checkbox-aviso" value="${c.id}"> ${c.nombre_candidato}</label></li>`).join('')}
+                    ${candidatos.map(c => `<li><label><input type="checkbox" class="candidato-checkbox-${type}" value="${c.id}"> ${c.nombre_candidato}</label></li>`).join('')}
                 </ul>`;
-            container.innerHTML = candHtml;
         } else {
-            container.innerHTML = '<p>No hay candidatos postulados en este aviso.</p>';
+            candidatesContainer.innerHTML = '<p>No se encontraron candidatos.</p>';
         }
-        updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso');
+        updateModalFooter(contentEl, footerEl, type);
     });
 
-    avisoModalContent.addEventListener('change', () => updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso'));
-    updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso');
+    // Listener único para cambios dentro del contenido del modal
+    contentEl.addEventListener('change', () => updateModalFooter(contentEl, footerEl, type));
+    updateModalFooter(contentEl, footerEl, type);
+}
+
+// Listeners para abrir los modales
+addFromDbBtn.addEventListener('click', () => setupModal(modalAddFromDb, dbModalContent, dbModalFooter, 'db'));
+addFromAvisoBtn.addEventListener('click', () => setupModal(modalAddFromAviso, avisoModalContent, avisoModalFooter, 'aviso'));
+
+// Listener de evento delegado en los footers de los modales
+[dbModalFooter, avisoModalFooter].forEach(footer => {
+    footer.addEventListener('click', (e) => {
+        const target = e.target;
+        const modal = target.closest('.modal-overlay');
+        
+        if (target.matches('.modal-close-btn')) {
+            hideModal(modal.id);
+        } else if (target.matches('.confirm-add-btn')) {
+            const type = target.dataset.type;
+            const selectedCandidatos = Array.from(modal.querySelectorAll(`.candidato-checkbox-${type}:checked`)).map(cb => cb.value);
+            addSelectedCandidatos(selectedCandidatos, modal);
+        }
+    });
 });
 
 function updateModalFooter(modalBody, modalFooter, type) {
@@ -279,24 +278,13 @@ function updateModalFooter(modalBody, modalFooter, type) {
             <span class="selection-count">${selectedCount} seleccionado(s)</span>
             <div>
                 <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
-                <button type="button" id="confirm-add-from-${type}" class="btn btn-primary">Agregar Seleccionados</button>
+                <button type="button" class="btn btn-primary confirm-add-btn" data-type="${type}">Agregar Seleccionados</button>
             </div>
         `;
-        modalFooter.querySelector(`#confirm-add-from-${type}`).addEventListener('click', () => {
-            const selectedCandidatos = Array.from(modalBody.querySelectorAll(`.candidato-checkbox-${type}:checked`)).map(cb => cb.value);
-            const modalElement = modalBody.closest('.modal-overlay');
-            addSelectedCandidatos(selectedCandidatos, modalElement);
-        });
-        modalFooter.querySelector('.modal-close-btn').addEventListener('click', () => {
-            hideModal(modalBody.closest('.modal-overlay').id);
-        });
     } else {
         modalFooter.innerHTML = `
             <button type="button" class="btn btn-secondary modal-close-btn" style="margin-left: auto;">Cerrar</button>
         `;
-        modalFooter.querySelector('.modal-close-btn').addEventListener('click', () => {
-            hideModal(modalBody.closest('.modal-overlay').id);
-        });
     }
 }
 
@@ -325,7 +313,8 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
         }
 
         const existingCandidatoIds = new Set(existingPostulaciones.map(p => p.candidato_id));
-        const nuevosCandidatoIds = selectedIds.filter(id => !existingCandidatoIds.has(id));
+        // Convert selectedIds to numbers for correct comparison
+        const nuevosCandidatoIds = selectedIds.map(Number).filter(id => !existingCandidatoIds.has(id));
         const existentes = selectedIds.length - nuevosCandidatoIds.length;
         let totalAgregados = 0;
 

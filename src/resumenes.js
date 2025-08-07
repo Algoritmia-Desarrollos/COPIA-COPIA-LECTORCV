@@ -6,6 +6,7 @@ import { toTitleCase, showModal, hideModal } from './utils.js';
 // --- SELECTORES DEL DOM ---
 const panelTitle = document.getElementById('panel-title');
 const processingStatus = document.getElementById('processing-status');
+const postulantesCountDisplay = document.getElementById('postulantes-count-display');
 const resumenesListBody = document.getElementById('resumenes-list');
 const detailsLinkBtn = document.getElementById('details-link-btn');
 const avisosList = document.getElementById('avisos-list');
@@ -19,7 +20,10 @@ const modalTitle = document.getElementById('modal-title');
 const modalSaveNotesBtn = document.getElementById('modal-save-notes');
 const modalResumenContent = document.getElementById('modal-resumen-content');
 const modalNotasTextarea = document.getElementById('modal-notas-textarea');
-const searchInput = document.getElementById('search-input');
+const filtroInput = document.getElementById('filtro-candidatos');
+const sortSelect = document.getElementById('sort-select');
+const modalCloseBtns = document.querySelectorAll('.modal-close-btn');
+
 
 // --- ESTADO DE LA APLICACIÓN ---
 let avisoActivo = null;
@@ -41,6 +45,10 @@ window.addEventListener('DOMContentLoaded', async () => {
         resumenesListBody.innerHTML = `<tr><td colspan="6" style="text-align: center;">Seleccione una búsqueda para ver los candidatos.</td></tr>`;
         processingStatus.textContent = '';
     }
+
+    modalCloseBtns.forEach(btn => {
+        btn.addEventListener('click', () => hideModal('modal-container'));
+    });
 });
 
 async function cargarAvisos() {
@@ -65,29 +73,57 @@ async function cargarAvisos() {
 }
 
 // --- FILTRADO Y BÚSQUEDA ---
-searchInput.addEventListener('input', () => {
-    const searchTerm = searchInput.value.toLowerCase().trim();
-    
-    if (searchTerm === '') {
-        renderizarTabla(postulacionesCache);
-        return;
+let searchTimeout;
+filtroInput.addEventListener('input', () => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(applyFiltersAndSort, 300);
+});
+
+sortSelect.addEventListener('change', applyFiltersAndSort);
+
+function applyFiltersAndSort() {
+    let data = [...postulacionesCache];
+    const searchTerm = filtroInput.value.toLowerCase().trim();
+    const sortValue = sortSelect.value;
+
+    // 1. Aplicar filtro de búsqueda si hay un término de búsqueda
+    if (searchTerm) {
+        data = data.filter(postulacion => {
+            const candidato = postulacion.v2_candidatos;
+            if (!candidato) return false;
+            const nombre = (candidato.nombre_candidato || '').toLowerCase();
+            const email = (candidato.email || '').toLowerCase();
+            const telefono = (candidato.telefono || '').toLowerCase();
+            return nombre.includes(searchTerm) || email.includes(searchTerm) || telefono.includes(searchTerm);
+        });
     }
 
-    const postulacionesFiltradas = postulacionesCache.filter(postulacion => {
-        const candidato = postulacion.v2_candidatos;
-        const nombre = candidato?.nombre_candidato?.toLowerCase() || '';
-        const email = candidato?.email?.toLowerCase() || '';
-        const telefono = candidato?.telefono?.toLowerCase() || '';
-        const nombreArchivo = postulacion.nombre_archivo_especifico?.toLowerCase() || '';
+    // 2. Aplicar ordenamiento
+    const [sortColumn, sortOrder] = sortValue.split('-');
+    const sortAscending = sortOrder === 'asc';
 
-        return nombre.includes(searchTerm) || 
-               email.includes(searchTerm) || 
-               telefono.includes(searchTerm) ||
-               nombreArchivo.includes(searchTerm);
+    data.sort((a, b) => {
+        if (sortColumn === 'nombre_candidato') {
+            const nameA = a.v2_candidatos?.nombre_candidato || '';
+            const nameB = b.v2_candidatos?.nombre_candidato || '';
+            return sortAscending ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
+        }
+        
+        if (sortColumn === 'calificacion') {
+            const scoreA = a.calificacion ?? -1;
+            const scoreB = b.calificacion ?? -1;
+            return sortAscending ? scoreA - scoreB : scoreB - scoreA;
+        }
+
+        // Default to created_at
+        const dateA = new Date(a.created_at || 0);
+        const dateB = new Date(b.created_at || 0);
+        return sortAscending ? dateA - dateB : dateB - dateA;
     });
 
-    renderizarTabla(postulacionesFiltradas);
-});
+    renderizarTabla(data);
+}
+
 
 async function cargarDatosDeAviso(avisoId) {
     try {
@@ -100,6 +136,11 @@ async function cargarDatosDeAviso(avisoId) {
             detailsLinkBtn.href = `detalles-aviso.html?id=${avisoId}`;
         }
 
+        // Establecer el contador estático
+        const maxCv = avisoActivo.max_cv || 'Ilimitados';
+        postulantesCountDisplay.innerHTML = `Total de postulantes: <strong>${avisoActivo.postulaciones_count} / ${maxCv}</strong>`;
+
+
         await cargarPostulantes(avisoId);
         await analizarPostulantesPendientes();
 
@@ -111,12 +152,12 @@ async function cargarDatosDeAviso(avisoId) {
 
 // --- LÓGICA DE CARGA Y ANÁLISIS ---
 async function cargarPostulantes(avisoId) {
-    processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cargando postulantes...`;
+    processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cargando todos los postulantes...`;
     
     const { data, error } = await supabase
         .from('v2_postulaciones')
         .select(`
-            id, calificacion, resumen, notas, nombre_archivo_especifico,
+            id, calificacion, resumen, notas, nombre_archivo_especifico, created_at,
             v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general)
         `)
         .eq('aviso_id', avisoId);
@@ -126,15 +167,13 @@ async function cargarPostulantes(avisoId) {
         processingStatus.textContent = 'Error al cargar postulantes.';
         return;
     }
-    postulacionesCache = data;
-    renderizarTablaCompleta();
+    
+    postulacionesCache = data || [];
+    applyFiltersAndSort(); // Aplicar filtros y orden inicial
+    processingStatus.innerHTML = ''; // Limpiar después de la carga inicial
 }
 
-async function analizarUnaPostulacion(postulacion, total) {
-    const index = postulacionesCache.findIndex(p => p.id === postulacion.id) + 1;
-    const nombreMostrado = postulacion.v2_candidatos?.nombre_candidato || 'Nuevo CV';
-    processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Analizando ${index} de ${total}: <strong>${nombreMostrado}</strong>`;
-
+async function analizarUnaPostulacion(postulacion) {
     try {
         // Carga perezosa del texto del CV
         const { data: postData, error: textError } = await supabase
@@ -164,23 +203,40 @@ async function analizarUnaPostulacion(postulacion, total) {
 }
 
 async function analizarPostulantesPendientes() {
-    // Ahora también reintenta los que fallaron (calificacion: -1)
     const postulacionesNuevas = postulacionesCache.filter(p => p.calificacion === null || p.calificacion === -1);
-    const totalPostulaciones = postulacionesCache.length;
-    const maxCv = avisoActivo.max_cv || 'Ilimitados';
+    const totalNuevas = postulacionesNuevas.length;
 
-    if (postulacionesNuevas.length > 0) {
-        const totalNuevas = postulacionesNuevas.length;
-        processingStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin"></i> Preparando análisis para ${totalNuevas} de ${totalPostulaciones} candidatos...`;
-        
-        // Procesar en paralelo
-        const analysisPromises = postulacionesNuevas.map(p => analizarUnaPostulacion(p, totalNuevas));
-        await Promise.all(analysisPromises);
-
-        processingStatus.textContent = `¡Análisis completado! Se han procesado ${totalNuevas} nuevos candidatos. Total: ${totalPostulaciones} / ${maxCv}.`;
-    } else {
-        processingStatus.textContent = `Todos los ${totalPostulaciones} / ${maxCv} candidatos están analizados.`;
+    if (totalNuevas === 0) {
+        processingStatus.textContent = '';
+        return;
     }
+
+    processingStatus.innerHTML = `<i class="fa-solid fa-sync fa-spin"></i> Preparando análisis para ${totalNuevas} candidatos...`;
+
+    const CONCURRENCY_LIMIT = 15;
+    let currentIndex = 0;
+
+    const procesarLote = async () => {
+        const lote = postulacionesNuevas.slice(currentIndex, currentIndex + CONCURRENCY_LIMIT);
+        if (lote.length === 0) {
+            if (currentIndex >= totalNuevas) {
+                processingStatus.textContent = `¡Análisis completado! Se han procesado ${totalNuevas} nuevos candidatos.`;
+            }
+            return;
+        }
+
+        const start = currentIndex + 1;
+        const end = Math.min(currentIndex + lote.length, totalNuevas);
+        processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Analizando candidatos ${start}-${end} de ${totalNuevas}...`;
+
+        const promesas = lote.map(postulacion => analizarUnaPostulacion(postulacion));
+        await Promise.all(promesas);
+
+        currentIndex += lote.length;
+        await procesarLote(); // Llamada recursiva para el siguiente lote
+    };
+
+    await procesarLote();
 }
 
 async function calificarCVConIA(textoCV, aviso) {
@@ -264,16 +320,20 @@ function renderizarTabla(postulaciones) {
     });
 }
 
-function renderizarTablaCompleta() {
-    postulacionesCache.sort((a, b) => (b.calificacion ?? 101) - (a.calificacion ?? 101));
-    renderizarTabla(postulacionesCache);
-}
-
 function actualizarFilaEnVista(postulacionId, datosActualizados) {
     const index = postulacionesCache.findIndex(p => p.id === postulacionId);
     if (index > -1) {
+        // Actualiza la caché de datos en memoria
         postulacionesCache[index] = { ...postulacionesCache[index], ...datosActualizados };
-        renderizarTablaCompleta();
+        
+        // Busca la fila existente en el DOM
+        const oldRow = resumenesListBody.querySelector(`tr[data-id='${postulacionId}']`);
+        if (oldRow) {
+            // Crea la nueva fila con los datos actualizados
+            const newRow = crearFila(postulacionesCache[index]);
+            // Reemplaza la fila antigua por la nueva para actualizar la vista sin reordenar
+            oldRow.replaceWith(newRow);
+        }
     }
 }
 
@@ -361,42 +421,53 @@ uploadCvBtn.addEventListener('click', () => {
     fileInput.accept = 'application/pdf';
     fileInput.multiple = true;
     fileInput.onchange = async (e) => {
-        const files = e.target.files;
+        const files = Array.from(e.target.files);
         if (files.length === 0) return;
+
         uploadCvBtn.disabled = true;
+        uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Preparando subida...`;
 
-        // Crear un set con los nombres de archivo existentes para una búsqueda rápida
         const existingFileNames = new Set(postulacionesCache.map(p => p.nombre_archivo_especifico));
-        let archivosOmitidos = 0;
-        
-        for (const [index, file] of Array.from(files).entries()) {
-            uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Subiendo ${index + 1}/${files.length}`;
-            
-            // Verificar si el archivo ya existe en el aviso actual
-            if (existingFileNames.has(file.name)) {
-                console.warn(`Archivo omitido (duplicado): ${file.name}`);
-                archivosOmitidos++;
-                continue; // Saltar al siguiente archivo
-            }
+        const newFiles = files.filter(file => !existingFileNames.has(file.name));
+        const archivosOmitidos = files.length - newFiles.length;
 
+        const CONCURRENCY_LIMIT = 15;
+        let currentIndex = 0;
+        const errors = [];
+
+        const processFile = async (file) => {
             try {
                 const base64 = await fileToBase64(file);
                 const textoCV = await extraerTextoDePDF(file);
                 const iaData = await extraerDatosConIA(textoCV);
                 await procesarCandidatoYPostulacion(iaData, base64, textoCV, file.name, avisoActivo.id);
-                // Añadir el nuevo nombre de archivo al set para evitar duplicados en la misma tanda
-                existingFileNames.add(file.name);
             } catch (error) {
-                alert(`Error al subir el CV ${file.name}: ${error.message}`);
+                console.error(`Error procesando ${file.name}:`, error);
+                errors.push(`${file.name}: ${error.message}`);
             }
+        };
+
+        while (currentIndex < newFiles.length) {
+            const lote = newFiles.slice(currentIndex, currentIndex + CONCURRENCY_LIMIT);
+            const start = currentIndex + 1;
+            const end = currentIndex + lote.length;
+            uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Subiendo y procesando ${start}-${end} de ${newFiles.length}`;
+            
+            const promesas = lote.map(file => processFile(file));
+            await Promise.all(promesas);
+            
+            currentIndex += lote.length;
         }
 
         if (archivosOmitidos > 0) {
             alert(`${archivosOmitidos} archivo(s) fueron omitidos porque ya existían en esta búsqueda.`);
         }
+        if (errors.length > 0) {
+            alert(`Ocurrieron errores al procesar ${errors.length} archivos:\n- ${errors.join('\n- ')}`);
+        }
         
         await cargarPostulantes(avisoActivo.id);
-        await analizarPostulantesPendientes();
+        analizarPostulantesPendientes(); // Inicia el análisis completo en segundo plano
         
         uploadCvBtn.disabled = false;
         uploadCvBtn.innerHTML = `<i class="fa-solid fa-upload"></i> Cargar CVs`;
@@ -431,7 +502,7 @@ bulkDeleteBtn.addEventListener('click', async () => {
             alert('Error al eliminar las postulaciones.');
         } else {
             postulacionesCache = postulacionesCache.filter(p => !idsToDelete.includes(p.id.toString()));
-            renderizarTablaCompleta();
+            renderizarTabla(postulacionesCache);
             updateBulkActionsVisibility();
         }
     }
@@ -507,31 +578,86 @@ function fileToBase64(file) {
     });
 }
 async function extraerTextoDePDF(file) {
+    const fileArrayBuffer = await file.arrayBuffer();
+    let pdf;
+
+    // Cargar el documento PDF una sola vez
     try {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+        pdf = await pdfjsLib.getDocument(fileArrayBuffer).promise;
+    } catch (error) {
+        console.error("Error al cargar el documento PDF:", error);
+        throw new Error("No se pudo cargar el archivo PDF, puede estar corrupto.");
+    }
+
+    // --- INTENTO 1: Extracción de texto nativo ---
+    try {
         let textoFinal = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             textoFinal += textContent.items.map(item => item.str).join(' ');
         }
-        if (textoFinal.trim().length > 50) return textoFinal.trim().replace(/\x00/g, '');
-    } catch (error) { console.warn("Extracción nativa fallida, intentando OCR.", error); }
-    try {
-        const { data: { text } } = await Tesseract.recognize(file, 'spa');
-        return text || "Texto no legible por OCR";
+        if (textoFinal.trim().length > 50) {
+            return textoFinal.trim().replace(/\x00/g, '');
+        }
+        console.warn("El texto nativo es muy corto, intentando OCR.");
     } catch (error) {
-        return "Contenido no legible.";
+        console.warn("Extracción nativa fallida, se procederá con OCR.", error);
     }
+
+    // --- INTENTO 2: OCR con Tesseract ---
+    try {
+        const worker = await Tesseract.createWorker('spa');
+        let textoCompleto = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            
+            const { data: { text } } = await worker.recognize(canvas.toDataURL());
+            textoCompleto += text + '\n';
+        }
+
+        await worker.terminate();
+        if (textoCompleto.trim()) return textoCompleto;
+
+    } catch (ocrError) {
+        console.error("El proceso de OCR falló catastróficamente:", ocrError);
+        throw new Error("No se pudo procesar el PDF ni con OCR.");
+    }
+
+    throw new Error("El PDF parece estar vacío o no es legible.");
 }
 async function extraerDatosConIA(texto) {
-    const prompt = `Actúa como RRHH. Extrae nombre, email y teléfono. Texto: """${texto.substring(0,4000)}""" Responde solo JSON con claves "nombreCompleto", "email", y "telefono". Si no encuentras, usa null.`;
+    const textoLimpio = texto.replace(/\s+/g, ' ').trim();
+    const prompt = `
+Actúa como un asistente de extracción de datos altamente preciso. Tu única tarea es analizar el siguiente texto de un CV y extraer el nombre completo, la dirección de email y el número de teléfono.
+
+**Instrucciones Clave:**
+1.  **Nombre Completo:** Busca el nombre más prominente, usualmente ubicado al principio del documento.
+2.  **Email:** Busca un texto que siga el formato de un correo electrónico (ej: texto@dominio.com). Sé flexible con los espacios que puedan haberse colado (ej: texto @ dominio . com).
+3.  **Teléfono:** Busca secuencias de números que parezcan un número de teléfono. Pueden incluir prefijos (+54), paréntesis, guiones o espacios. Prioriza números de móvil si hay varios.
+
+**Texto del CV a Analizar:**
+"""
+${textoLimpio.substring(0, 4000)}
+"""
+
+**Formato de Salida Obligatorio:**
+Responde únicamente con un objeto JSON válido con las claves "nombreCompleto", "email" y "telefono". Si no puedes encontrar un dato de forma confiable, usa el valor \`null\`. No incluyas ninguna otra explicación o texto fuera del JSON.
+`;
     try {
         const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
         if (error) throw error;
         return JSON.parse(data.message);
     } catch (e) {
+        console.error("Error al contactar o parsear la respuesta de la IA:", e);
         return { nombreCompleto: null, email: null, telefono: null };
     }
 }

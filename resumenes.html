@@ -56,10 +56,21 @@
             </div>
         </div>
 
-        <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;">Iniciando...</div>
+        <div id="postulantes-count-display" class="static-count-display" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background-color: var(--bg-light); border-radius: var(--radius-md);"></div>
+        <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;"></div>
 
-        <div class="search-container" style="margin-bottom: 1.5rem;">
-            <input type="text" id="search-input" class="form-control" placeholder="Buscar por nombre, contacto...">
+        <div class="filters-container" style="display: flex; gap: 1rem; margin-top: 1rem; margin-bottom: 1.5rem;">
+            <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
+                <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar por nombre, email o teléfono...">
+            </div>
+            <div class="form-group" style="flex-shrink: 0; margin-bottom: 0;">
+                <select id="sort-select" class="form-control">
+                    <option value="created_at-desc">Últimos agregados</option>
+                    <option value="nombre_candidato-asc">Nombre (A-Z)</option>
+                    <option value="nombre_candidato-desc">Nombre (Z-A)</option>
+                    <option value="calificacion-desc" selected>Mejor Calificación</option>
+                </select>
+            </div>
         </div>
         
         <div class="table-container">

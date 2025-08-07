@@ -58,14 +58,8 @@ export function showModal(modalId) {
     modalOverlay.classList.add('visible');
     document.body.style.overflow = 'hidden';
 
-    // Asigna listeners para cerrar el modal.
-    const closeButton = modalOverlay.querySelector('.modal-close-btn');
-    if (closeButton) {
-        closeButton.onclick = () => hideModal(modalId);
-    }
-    
+    // Los listeners para cerrar el modal se asignan una vez al cargar la página.
     modalOverlay.onclick = (event) => {
-        // Cierra el modal solo si se hace clic en el fondo (el overlay mismo).
         if (event.target === modalOverlay) {
             hideModal(modalId);
         }

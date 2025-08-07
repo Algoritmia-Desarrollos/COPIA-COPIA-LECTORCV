@@ -18,18 +18,16 @@ async function loadAvisos() {
     if (!avisoListBody) return;
 
     try {
-        // Hacemos dos consultas a la vez para ser más eficientes.
-        const [avisosRes, postulacionesRes] = await Promise.all([
-            supabase.from('v2_avisos').select('*').order('created_at', { ascending: false }),
-            supabase.from('v2_postulaciones').select('aviso_id', { count: 'exact' }) // Solo necesitamos el ID para contar
-        ]);
+        // Hacemos una única consulta que trae los datos del aviso, incluyendo el contador.
+        const { data: avisos, error } = await supabase
+            .from('v2_avisos')
+            .select('id, titulo, valido_hasta, max_cv, postulaciones_count')
+            .order('created_at', { ascending: false });
 
-        // Manejo de errores en las consultas
-        if (avisosRes.error) throw avisosRes.error;
-        if (postulacionesRes.error) throw postulacionesRes.error;
+        if (error) throw error;
 
-        // Si las consultas son exitosas, renderizamos la tabla
-        renderizarTabla(avisosRes.data, postulacionesRes.data);
+        // Si la consulta es exitosa, renderizamos la tabla
+        renderizarTabla(avisos);
 
     } catch (error) {
         console.error("Error al cargar los avisos:", error);
@@ -42,7 +40,7 @@ async function loadAvisos() {
  * @param {Array} avisos - El array de objetos de avisos desde Supabase.
  * @param {Array} postulaciones - El array de objetos de postulaciones para contar.
  */
-function renderizarTabla(avisos, postulaciones) {
+function renderizarTabla(avisos) {
     // Si no hay avisos, mostrar un mensaje amigable.
     if (!avisos || avisos.length === 0) {
         avisoListBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Aún no has creado ninguna búsqueda laboral.</td></tr>';
@@ -52,17 +50,10 @@ function renderizarTabla(avisos, postulaciones) {
     // Limpiar el estado de "Cargando..."
     avisoListBody.innerHTML = '';
 
-    // Creamos un mapa para contar eficientemente las postulaciones por aviso.
-    const postulacionesMap = new Map();
-    if (postulaciones) {
-        for (const post of postulaciones) {
-            postulacionesMap.set(post.aviso_id, (postulacionesMap.get(post.aviso_id) || 0) + 1);
-        }
-    }
-
     // Iteramos sobre cada aviso para crear su fila en la tabla.
     avisos.forEach(aviso => {
-        const postulacionesCount = postulacionesMap.get(aviso.id) || 0;
+        // El conteo ahora viene directamente en la columna `postulaciones_count`.
+        const postulacionesCount = aviso.postulaciones_count;
         
         // Formateamos la fecha para que sea más legible.
         const validoHasta = new Date(aviso.valido_hasta).toLocaleDateString('es-AR', {

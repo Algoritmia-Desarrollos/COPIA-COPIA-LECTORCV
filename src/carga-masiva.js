@@ -68,6 +68,21 @@ function setupPublicLink() {
 
 // --- MANEJO DE LA COLA DE CARGA ---
 
+function getStatusInfo(status) {
+    switch (status) {
+        case 'pendiente':
+            return { icon: 'fa-regular fa-clock', text: 'Pendiente' };
+        case 'procesando':
+            return { icon: 'fa-solid fa-spinner fa-spin', text: 'Procesando' };
+        case 'exito':
+            return { icon: 'fa-solid fa-check-circle', text: 'Éxito' };
+        case 'error':
+            return { icon: 'fa-solid fa-times-circle', text: 'Error' };
+        default:
+            return { icon: 'fa-solid fa-question-circle', text: 'Desconocido' };
+    }
+}
+
 function handleFileSelection(e) {
     const files = Array.from(e.target.files);
     files.forEach(file => {
@@ -92,12 +107,16 @@ function renderQueue() {
         queueList.innerHTML = '';
         fileQueue.forEach(item => {
             const li = document.createElement('li');
+            const statusInfo = getStatusInfo(item.status);
             li.className = `queue-item status-${item.status}`;
             li.dataset.id = item.id;
             li.innerHTML = `
-                <span class="file-name">${item.file.name}</span>
-                <span class="status-badge">${item.status}</span>
-                ${item.error ? `<span class="error-message">${item.error}</span>` : ''}
+                <div class="status-icon"><i class="fa-fw ${statusInfo.icon}"></i></div>
+                <div class="file-details">
+                    <span class="file-name">${item.file.name}</span>
+                    ${item.error ? `<span class="error-message">${item.error}</span>` : ''}
+                </div>
+                <span class="status-badge">${statusInfo.text}</span>
             `;
             queueList.appendChild(li);
         });
@@ -111,17 +130,31 @@ function renderQueue() {
 function updateQueueItemUI(id, status, errorMsg = null) {
     const li = queueList.querySelector(`[data-id="${id}"]`);
     if (!li) return;
+
+    const statusInfo = getStatusInfo(status);
     li.className = `queue-item status-${status}`;
-    li.querySelector('.status-badge').textContent = status;
+    
+    const iconEl = li.querySelector('.status-icon i');
+    if (iconEl) {
+        iconEl.className = `fa-fw ${statusInfo.icon}`;
+    }
 
-    const existingError = li.querySelector('.error-message');
-    if (existingError) existingError.remove();
+    const badgeEl = li.querySelector('.status-badge');
+    if (badgeEl) {
+        badgeEl.textContent = statusInfo.text;
+    }
 
-    if (status === 'error' && errorMsg) {
-        const errorSpan = document.createElement('span');
-        errorSpan.className = 'error-message';
-        errorSpan.textContent = errorMsg;
-        li.appendChild(errorSpan);
+    const fileDetailsEl = li.querySelector('.file-details');
+    if (fileDetailsEl) {
+        const existingError = fileDetailsEl.querySelector('.error-message');
+        if (existingError) existingError.remove();
+
+        if (status === 'error' && errorMsg) {
+            const errorSpan = document.createElement('span');
+            errorSpan.className = 'error-message';
+            errorSpan.textContent = errorMsg;
+            fileDetailsEl.appendChild(errorSpan);
+        }
     }
 }
 
@@ -136,8 +169,13 @@ async function processQueue() {
     isProcessing = true;
     renderQueue();
 
-    for (const item of fileQueue) {
-        if (item.status === 'pendiente') {
+    const itemsToProcess = fileQueue.filter(item => item.status === 'pendiente');
+    const CONCURRENCY_LIMIT = 15;
+
+    for (let i = 0; i < itemsToProcess.length; i += CONCURRENCY_LIMIT) {
+        const batch = itemsToProcess.slice(i, i + CONCURRENCY_LIMIT);
+        
+        const promises = batch.map(async (item) => {
             try {
                 item.status = 'procesando';
                 updateQueueItemUI(item.id, 'procesando');
@@ -158,7 +196,9 @@ async function processQueue() {
                 item.error = error.message;
                 updateQueueItemUI(item.id, 'error', error.message);
             }
-        }
+        });
+
+        await Promise.all(promises);
     }
 
     isProcessing = false;
@@ -178,7 +218,7 @@ async function procesarCandidato(iaData, base64, textoCV, nombreArchivo, carpeta
         .from('v2_candidatos')
         .upsert({
             nombre_candidato: nombreFormateado,
-            email: iaData.email || 'no-extraido@dominio.com',
+            email: iaData.email || `no-extraido-${Date.now()}@dominio.com`,
             telefono: iaData.telefono,
             base64_general: base64,
             texto_cv_general: textoCV,
@@ -186,7 +226,7 @@ async function procesarCandidato(iaData, base64, textoCV, nombreArchivo, carpeta
             carpeta_id: carpetaId,
             updated_at: new Date()
         }, {
-            onConflict: 'nombre_candidato'
+            onConflict: 'nombre_candidato' // Corregido para consistencia
         });
 
     if (error) throw new Error(`Error en base de datos: ${error.message}`);
@@ -196,28 +236,79 @@ async function procesarCandidato(iaData, base64, textoCV, nombreArchivo, carpeta
 // --- FUNCIONES AUXILIARES ---
 function fileToBase64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => res(r.result); r.onerror = e => rej(e); }); }
 async function extraerTextoDePDF(base64) {
+    let pdf;
+
+    // Cargar el documento PDF una sola vez
     try {
-        const pdf = await pdfjsLib.getDocument(base64).promise;
+        pdf = await pdfjsLib.getDocument(base64).promise;
+    } catch (error) {
+        console.error("Error al cargar el documento PDF:", error);
+        throw new Error("No se pudo cargar el archivo PDF, puede estar corrupto.");
+    }
+
+    // --- INTENTO 1: Extracción de texto nativo ---
+    try {
         let textoFinal = '';
         for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
             textoFinal += textContent.items.map(item => item.str).join(' ');
         }
-        if (textoFinal.trim().length > 50) return textoFinal.trim().replace(/\x00/g, '');
-    } catch (error) { console.warn("Extracción nativa fallida, intentando con OCR.", error); }
+        if (textoFinal.trim().length > 50) {
+            return textoFinal.trim().replace(/\x00/g, '');
+        }
+        console.warn("El texto nativo es muy corto, intentando OCR.");
+    } catch (error) {
+        console.warn("Extracción nativa fallida, se procederá con OCR.", error);
+    }
+
+    // --- INTENTO 2: OCR con Tesseract ---
     try {
         const worker = await Tesseract.createWorker('spa');
-        const { data: { text } } = await worker.recognize(base64);
+        let textoCompleto = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            
+            const { data: { text } } = await worker.recognize(canvas.toDataURL());
+            textoCompleto += text + '\n';
+        }
+
         await worker.terminate();
-        return text || "Texto no legible por OCR";
-    } catch (error) {
-        console.error("Error de OCR:", error);
-        return "El contenido del PDF no pudo ser leído.";
+        if (textoCompleto.trim()) return textoCompleto;
+
+    } catch (ocrError) {
+        console.error("El proceso de OCR falló catastróficamente:", ocrError);
+        throw new Error("No se pudo procesar el PDF ni con OCR.");
     }
+
+    throw new Error("El PDF parece estar vacío o no es legible.");
 }
 async function extraerDatosConIA(texto) {
-    const prompt = `Actúa como un experto en RRHH. Analiza este CV y extrae nombre completo, email y teléfono. Texto: """${texto.substring(0,4000)}""" Responde solo con JSON con claves "nombreCompleto", "email" y "telefono". Si no encuentras un dato, usa null.`;
+    const textoLimpio = texto.replace(/\s+/g, ' ').trim();
+    const prompt = `
+Actúa como un asistente de extracción de datos altamente preciso. Tu única tarea es analizar el siguiente texto de un CV y extraer el nombre completo, la dirección de email y el número de teléfono.
+
+**Instrucciones Clave:**
+1.  **Nombre Completo:** Busca el nombre más prominente, usualmente ubicado al principio del documento.
+2.  **Email:** Busca un texto que siga el formato de un correo electrónico (ej: texto@dominio.com). Sé flexible con los espacios que puedan haberse colado (ej: texto @ dominio . com).
+3.  **Teléfono:** Busca secuencias de números que parezcan un número de teléfono. Pueden incluir prefijos (+54), paréntesis, guiones o espacios. Prioriza números de móvil si hay varios.
+
+**Texto del CV a Analizar:**
+"""
+${textoLimpio.substring(0, 4000)}
+"""
+
+**Formato de Salida Obligatorio:**
+Responde únicamente con un objeto JSON válido con las claves "nombreCompleto", "email" y "telefono". Si no puedes encontrar un dato de forma confiable, usa el valor \`null\`. No incluyas ninguna otra explicación o texto fuera del JSON.
+`;
     try {
         const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
         if (error) throw error;
