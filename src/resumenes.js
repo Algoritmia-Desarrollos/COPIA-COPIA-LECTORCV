@@ -164,7 +164,8 @@ async function analizarUnaPostulacion(postulacion, total) {
 }
 
 async function analizarPostulantesPendientes() {
-    const postulacionesNuevas = postulacionesCache.filter(p => p.calificacion === null);
+    // Ahora también reintenta los que fallaron (calificacion: -1)
+    const postulacionesNuevas = postulacionesCache.filter(p => p.calificacion === null || p.calificacion === -1);
     const totalPostulaciones = postulacionesCache.length;
     const maxCv = avisoActivo.max_cv || 'Ilimitados';
 
@@ -363,17 +364,35 @@ uploadCvBtn.addEventListener('click', () => {
         const files = e.target.files;
         if (files.length === 0) return;
         uploadCvBtn.disabled = true;
+
+        // Crear un set con los nombres de archivo existentes para una búsqueda rápida
+        const existingFileNames = new Set(postulacionesCache.map(p => p.nombre_archivo_especifico));
+        let archivosOmitidos = 0;
         
         for (const [index, file] of Array.from(files).entries()) {
             uploadCvBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Subiendo ${index + 1}/${files.length}`;
+            
+            // Verificar si el archivo ya existe en el aviso actual
+            if (existingFileNames.has(file.name)) {
+                console.warn(`Archivo omitido (duplicado): ${file.name}`);
+                archivosOmitidos++;
+                continue; // Saltar al siguiente archivo
+            }
+
             try {
                 const base64 = await fileToBase64(file);
                 const textoCV = await extraerTextoDePDF(file);
                 const iaData = await extraerDatosConIA(textoCV);
                 await procesarCandidatoYPostulacion(iaData, base64, textoCV, file.name, avisoActivo.id);
+                // Añadir el nuevo nombre de archivo al set para evitar duplicados en la misma tanda
+                existingFileNames.add(file.name);
             } catch (error) {
                 alert(`Error al subir el CV ${file.name}: ${error.message}`);
             }
+        }
+
+        if (archivosOmitidos > 0) {
+            alert(`${archivosOmitidos} archivo(s) fueron omitidos porque ya existían en esta búsqueda.`);
         }
         
         await cargarPostulantes(avisoActivo.id);

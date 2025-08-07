@@ -84,7 +84,7 @@ function renderizarTabla(avisos, postulaciones) {
             <td>
                 <div class="actions-group">
                     <a href="resumenes.html?avisoId=${aviso.id}" class="btn btn-secondary">Ver Postulantes</a>
-                    <a href="detalles-aviso.html?id=${aviso.id}" class="btn btn-secondary">Detalles</a>
+                    <a href="detalles-aviso.html?id=${aviso.id}&count=${postulacionesCount}" class="btn btn-secondary">Detalles</a>
                 </div>
             </td>
         `;

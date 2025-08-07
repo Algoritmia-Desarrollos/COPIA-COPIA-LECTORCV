@@ -39,6 +39,7 @@ let currentAvisoId = null;
 window.addEventListener('DOMContentLoaded', async () => {
     const params = new URLSearchParams(window.location.search);
     const avisoId = params.get('id');
+    const postulantesCount = params.get('count'); // Obtenemos el conteo desde la URL
     currentAvisoId = avisoId;
 
     if (!avisoId) {
@@ -46,7 +47,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    await loadAvisoDetails(avisoId);
+    await loadAvisoDetails(avisoId, postulantesCount); // Pasamos el conteo a la función
 
     // Listener para los checkboxes "Seleccionar Todos" en los modales
     document.body.addEventListener('change', (e) => {
@@ -70,25 +71,44 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-async function loadAvisoDetails(id) {
-    const { data, error } = await supabase
+async function loadAvisoDetails(id, countFromUrl) {
+    // Cargar los detalles principales del aviso.
+    const { data: avisoData, error: avisoError } = await supabase
         .from('v2_avisos')
-        .select('*, v2_postulaciones(count)')
+        .select('*')
         .eq('id', id)
         .single();
 
-    if (error) {
-        console.error('Error cargando los detalles del aviso:', error);
+    if (avisoError) {
+        console.error('Error cargando los detalles del aviso:', avisoError);
         document.body.innerHTML = `<div class="panel-container" style="text-align: center; margin: 2rem auto; max-width: 600px;"><h1>Error</h1><p>No se pudo cargar el aviso. Es posible que haya sido eliminado.</p><a href="lista-avisos.html" class="btn btn-primary">Volver a la lista</a></div>`;
         return;
     }
 
-    avisoActivo = data;
-    populateUI(avisoActivo);
+    avisoActivo = avisoData;
+    populateUI(avisoActivo); // Rellenar la UI con la información básica.
 
-    const postulantesCount = avisoActivo.v2_postulaciones[0]?.count || 0;
     const maxCv = avisoActivo.max_cv || 'Ilimitados';
-    postulantesHeader.textContent = `Candidatos Postulados (${postulantesCount} / ${maxCv})`;
+
+    // Usar el conteo de la URL si está disponible.
+    if (countFromUrl !== null && !isNaN(countFromUrl)) {
+        postulantesHeader.textContent = `Candidatos Postulados (${countFromUrl} / ${maxCv})`;
+    } else {
+        // Si no viene en la URL (por ejemplo, si se accede directamente al link),
+        // mostramos "Cargando..." y hacemos la consulta como antes.
+        postulantesHeader.textContent = `Candidatos Postulados (Cargando... / ${maxCv})`;
+        const { count, error } = await supabase
+            .from('v2_postulaciones')
+            .select('*', { count: 'exact', head: true })
+            .eq('aviso_id', id);
+
+        if (error) {
+            console.error('Error cargando el conteo de postulantes:', error);
+            postulantesHeader.textContent = `Candidatos Postulados (Error / ${maxCv})`;
+        } else {
+            postulantesHeader.textContent = `Candidatos Postulados (${count} / ${maxCv})`;
+        }
+    }
 }
 
 function populateUI(aviso) {
@@ -282,7 +302,7 @@ function updateModalFooter(modalBody, modalFooter, type) {
 
 async function addSelectedCandidatos(selectedIds, fromModal) {
     const confirmBtn = fromModal.querySelector('.btn-primary');
-    if (!confirmBtn) return;
+    if (!confirmBtn || confirmBtn.disabled) return;
 
     if (selectedIds.length === 0) {
         alert('No has seleccionado ningún candidato.');
@@ -290,66 +310,89 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
     }
 
     confirmBtn.disabled = true;
-    let nuevos = 0;
-    let existentes = 0;
+    confirmBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Preparando...`;
 
-    for (const [index, candidatoId] of selectedIds.entries()) {
-        confirmBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Procesando ${index + 1}/${selectedIds.length}`;
-
-        const { data: existing, error: checkError } = await supabase
+    try {
+        // 1. Verificar en lote cuáles candidatos ya existen en la postulación actual.
+        const { data: existingPostulaciones, error: checkError } = await supabase
             .from('v2_postulaciones')
-            .select('id')
-            .eq('candidato_id', candidatoId)
+            .select('candidato_id')
             .eq('aviso_id', currentAvisoId)
-            .single();
+            .in('candidato_id', selectedIds);
 
-        if (checkError && checkError.code !== 'PGRST116') {
-            console.error('Error verificando postulación existente:', checkError);
-            continue;
+        if (checkError) {
+            throw new Error(`Error verificando postulaciones existentes: ${checkError.message}`);
         }
 
-        if (existing) {
-            existentes++;
-            continue;
+        const existingCandidatoIds = new Set(existingPostulaciones.map(p => p.candidato_id));
+        const nuevosCandidatoIds = selectedIds.filter(id => !existingCandidatoIds.has(id));
+        const existentes = selectedIds.length - nuevosCandidatoIds.length;
+        let totalAgregados = 0;
+
+        if (nuevosCandidatoIds.length === 0) {
+            alert(`Proceso finalizado.\n\n- 0 candidatos fueron agregados.\n- ${existentes} candidato(s) ya se encontraban en la lista.`);
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Agregar Seleccionados';
+            hideModal(fromModal.id);
+            return;
         }
 
-        const { data: candidatoData, error: fetchError } = await supabase
-            .from('v2_candidatos')
-            .select('texto_cv_general, nombre_archivo_general, base64_general')
-            .eq('id', candidatoId)
-            .single();
+        // 2. Procesar los nuevos candidatos en lotes para evitar timeouts.
+        const BATCH_SIZE = 50; // Lotes de 50 candidatos
+        for (let i = 0; i < nuevosCandidatoIds.length; i += BATCH_SIZE) {
+            const batchIds = nuevosCandidatoIds.slice(i, i + BATCH_SIZE);
+            const progress = i + batchIds.length;
+            confirmBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Procesando ${progress}/${nuevosCandidatoIds.length}...`;
 
-        if (fetchError) {
-            console.error(`Error obteniendo datos del candidato ${candidatoId}:`, fetchError);
-            continue;
+            // 2a. Obtener datos del lote actual.
+            const { data: candidatosData, error: fetchError } = await supabase
+                .from('v2_candidatos')
+                .select('id, texto_cv_general, nombre_archivo_general, base64_general')
+                .in('id', batchIds);
+
+            if (fetchError) {
+                throw new Error(`Error obteniendo datos de los candidatos (lote ${i / BATCH_SIZE + 1}): ${fetchError.message}`);
+            }
+
+            // 2b. Preparar el lote de nuevas postulaciones.
+            const nuevasPostulaciones = candidatosData.map(candidatoData => ({
+                candidato_id: candidatoData.id,
+                aviso_id: currentAvisoId,
+                texto_cv_especifico: candidatoData.texto_cv_general,
+                nombre_archivo_especifico: candidatoData.nombre_archivo_general,
+                base64_cv_especifico: candidatoData.base64_general,
+                calificacion: null
+            }));
+
+            // 2c. Insertar el lote actual.
+            const { error: insertError } = await supabase
+                .from('v2_postulaciones')
+                .insert(nuevasPostulaciones);
+
+            if (insertError) {
+                if (insertError.code === '23505') {
+                    throw new Error(`Error de duplicados al insertar (lote ${i / BATCH_SIZE + 1}): ${insertError.message}.`);
+                }
+                throw new Error(`Error insertando postulaciones (lote ${i / BATCH_SIZE + 1}): ${insertError.message}`);
+            }
+            totalAgregados += nuevasPostulaciones.length;
         }
 
-        const newPostulacion = {
-            candidato_id: candidatoId,
-            aviso_id: currentAvisoId,
-            texto_cv_especifico: candidatoData.texto_cv_general,
-            nombre_archivo_especifico: candidatoData.nombre_archivo_general,
-            base64_cv_especifico: candidatoData.base64_general,
-            calificacion: null
-        };
+        // 3. Mostrar resumen y recargar.
+        confirmBtn.textContent = '¡Completado!';
+        let summary = `Proceso finalizado.\n\n`;
+        summary += `- ${totalAgregados} candidato(s) fueron agregados a la búsqueda.\n`;
+        summary += `- ${existentes} candidato(s) ya se encontraban en la lista.`;
+        
+        alert(summary);
+        window.location.reload();
 
-        const { error: insertError } = await supabase.from('v2_postulaciones').insert(newPostulacion);
-
-        if (insertError) {
-            console.error(`Error insertando postulación para candidato ${candidatoId}:`, insertError);
-        } else {
-            nuevos++;
-        }
+    } catch (error) {
+        console.error("Error en el proceso de agregar candidatos:", error);
+        alert(`Ocurrió un error: ${error.message}`);
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Reintentar';
     }
-
-    confirmBtn.textContent = '¡Completado!';
-    let summary = `Proceso finalizado.\n\n`;
-    summary += `- ${nuevos} candidato(s) fueron agregados a la búsqueda.\n`;
-    summary += `- ${existentes} candidato(s) ya se encontraban en la lista.`;
-    
-    alert(summary);
-    
-    window.location.reload();
 }
 
 // Los listeners de los botones de confirmación ahora se añaden dinámicamente en updateModalFooter
