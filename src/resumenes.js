@@ -19,6 +19,7 @@ const modalTitle = document.getElementById('modal-title');
 const modalSaveNotesBtn = document.getElementById('modal-save-notes');
 const modalResumenContent = document.getElementById('modal-resumen-content');
 const modalNotasTextarea = document.getElementById('modal-notas-textarea');
+const searchInput = document.getElementById('search-input');
 
 // --- ESTADO DE LA APLICACIÓN ---
 let avisoActivo = null;
@@ -62,6 +63,31 @@ async function cargarAvisos() {
         document.querySelector(`[data-aviso-id="${currentAvisoId}"]`)?.classList.add('active');
     }
 }
+
+// --- FILTRADO Y BÚSQUEDA ---
+searchInput.addEventListener('input', () => {
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    
+    if (searchTerm === '') {
+        renderizarTabla(postulacionesCache);
+        return;
+    }
+
+    const postulacionesFiltradas = postulacionesCache.filter(postulacion => {
+        const candidato = postulacion.v2_candidatos;
+        const nombre = candidato?.nombre_candidato?.toLowerCase() || '';
+        const email = candidato?.email?.toLowerCase() || '';
+        const telefono = candidato?.telefono?.toLowerCase() || '';
+        const nombreArchivo = postulacion.nombre_archivo_especifico?.toLowerCase() || '';
+
+        return nombre.includes(searchTerm) || 
+               email.includes(searchTerm) || 
+               telefono.includes(searchTerm) ||
+               nombreArchivo.includes(searchTerm);
+    });
+
+    renderizarTabla(postulacionesFiltradas);
+});
 
 async function cargarDatosDeAviso(avisoId) {
     try {
@@ -209,16 +235,22 @@ async function calificarCVConIA(textoCV, aviso) {
 }
 
 // --- RENDERIZADO Y UI ---
-function renderizarTablaCompleta() {
+function renderizarTabla(postulaciones) {
     resumenesListBody.innerHTML = '';
-    postulacionesCache.sort((a, b) => (b.calificacion ?? 101) - (a.calificacion ?? 101));
-    if (postulacionesCache.length === 0) {
-        resumenesListBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Nadie se ha postulado todavía.</td></tr>`;
+    
+    if (postulaciones.length === 0) {
+        resumenesListBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">No se encontraron candidatos que coincidan con la búsqueda.</td></tr>`;
         return;
     }
-    postulacionesCache.forEach(postulacion => {
+
+    postulaciones.forEach(postulacion => {
         resumenesListBody.appendChild(crearFila(postulacion));
     });
+}
+
+function renderizarTablaCompleta() {
+    postulacionesCache.sort((a, b) => (b.calificacion ?? 101) - (a.calificacion ?? 101));
+    renderizarTabla(postulacionesCache);
 }
 
 function actualizarFilaEnVista(postulacionId, datosActualizados) {

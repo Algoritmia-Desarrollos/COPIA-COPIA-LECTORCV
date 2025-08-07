@@ -21,6 +21,7 @@ const bulkActionsContainer = document.getElementById('bulk-actions-container');
 const moveToFolderSelect = document.getElementById('move-to-folder-select');
 const bulkMoveBtn = document.getElementById('bulk-move-btn');
 const bulkDeleteBtn = document.getElementById('bulk-delete-btn');
+const selectionCount = document.getElementById('selection-count');
 
 // Formulario de Carpetas
 const showAddFolderFormBtn = document.getElementById('show-add-folder-form-btn');
@@ -43,7 +44,7 @@ const textModalBody = document.getElementById('text-modal-body');
 let carpetasCache = [];
 let currentFolderId = 'all';
 let currentPage = 1;
-const rowsPerPage = 50;
+const rowsPerPage = 100;
 let totalCandidates = 0;
 let currentSearchTerm = '';
 
@@ -76,22 +77,34 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // --- LÓGICA DE CARPETAS ---
 async function loadFolders() {
-    const { data, error } = await supabase.from('v2_carpetas').select('*').order('nombre');
+    const { data, error } = await supabase.from('v2_carpetas').select('*, v2_candidatos(id)').order('nombre');
     if (error) { console.error("Error al cargar carpetas:", error); return; }
+    
+    const { data: allCandidates, error: candidatesError } = await supabase.from('v2_candidatos').select('id, carpeta_id');
+    if(candidatesError) { console.error("Error al cargar candidatos:", candidatesError); return; }
+
+    const counts = allCandidates.reduce((acc, candidato) => {
+        const folderId = candidato.carpeta_id === null ? 'none' : candidato.carpeta_id;
+        acc[folderId] = (acc[folderId] || 0) + 1;
+        return acc;
+    }, {});
+    counts['all'] = allCandidates.length;
+
     carpetasCache = data;
-    renderFoldersUI();
+    renderFoldersUI(counts);
     populateFolderSelects();
 }
 
-function renderFoldersUI() {
+function renderFoldersUI(counts = {}) {
     folderList.innerHTML = ''; // Limpiar la lista existente
 
     // --- Renderizar carpetas estáticas ---
     ['Todos los Candidatos', 'Sin Carpeta'].forEach(name => {
         const id = name === 'Todos los Candidatos' ? 'all' : 'none';
         const icon = id === 'all' ? 'fa-inbox' : 'fa-folder-open';
+        const count = counts[id] || 0;
         const li = document.createElement('li');
-        li.innerHTML = `<div class="folder-item" data-folder-id="${id}"><i class="fa-solid ${icon}"></i> <span class="folder-name">${name}</span></div>`;
+        li.innerHTML = `<div class="folder-item" data-folder-id="${id}"><i class="fa-solid ${icon}"></i> <span class="folder-name">${name}</span> <span class="folder-count">(${count})</span></div>`;
         li.querySelector('.folder-item').addEventListener('click', (e) => handleFolderClick(id, name, e.currentTarget));
         folderList.appendChild(li);
     });
@@ -118,11 +131,13 @@ function renderFoldersUI() {
         carpetas.forEach(folder => {
             const li = document.createElement('li');
             const hasChildren = folder.children.length > 0;
+            const count = counts[folder.id] || 0;
             li.innerHTML = `
                 <div class="folder-item ${isSublevel ? 'is-subfolder' : ''}" data-folder-id="${folder.id}" draggable="true">
                     <span class="folder-toggle">${hasChildren ? '<i class="fa-solid fa-chevron-right"></i>' : ''}</span>
                     <i class="fa-solid fa-folder"></i> 
                     <span class="folder-name">${folder.nombre}</span>
+                    <span class="folder-count">(${count})</span>
                     <div class="folder-item-actions">
                         <button class="btn-icon" data-action="edit-folder"><i class="fa-solid fa-pencil"></i></button>
                         <button class="btn-icon" data-action="delete-folder"><i class="fa-solid fa-trash-can"></i></button>
@@ -436,7 +451,11 @@ function addTableRowListeners(row) {
 
 // --- ACCIONES EN LOTE Y MODALES ---
 function getSelectedIds() { return Array.from(talentosListBody.querySelectorAll('.candidate-checkbox:checked')).map(cb => cb.dataset.id); }
-function updateBulkActionsVisibility() { bulkActionsContainer.classList.toggle('hidden', getSelectedIds().length === 0); }
+function updateBulkActionsVisibility() { 
+    const selectedCount = getSelectedIds().length;
+    bulkActionsContainer.classList.toggle('hidden', selectedCount === 0); 
+    selectionCount.textContent = `(${selectedCount} seleccionados)`;
+}
 function handleSelectAll() {
     talentosListBody.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = selectAllCheckbox.checked);
     updateBulkActionsVisibility();

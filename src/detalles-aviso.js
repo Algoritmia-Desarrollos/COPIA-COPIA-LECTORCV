@@ -27,8 +27,8 @@ const modalAddFromDb = document.getElementById('modal-add-from-db');
 const modalAddFromAviso = document.getElementById('modal-add-from-aviso');
 const dbModalContent = document.getElementById('db-modal-content');
 const avisoModalContent = document.getElementById('aviso-modal-content');
-const confirmAddFromDbBtn = document.getElementById('confirm-add-from-db');
-const confirmAddFromAvisoBtn = document.getElementById('confirm-add-from-aviso');
+const dbModalFooter = document.getElementById('db-modal-footer');
+const avisoModalFooter = document.getElementById('aviso-modal-footer');
 const modalEditAviso = document.getElementById('modal-edit-aviso');
 const confirmEditAvisoBtn = document.getElementById('confirm-edit-aviso-btn');
 
@@ -59,6 +59,11 @@ window.addEventListener('DOMContentLoaded', async () => {
                     list.querySelectorAll('input[type="checkbox"]').forEach(cb => {
                         cb.checked = isChecked;
                     });
+                    // Disparar manualmente un evento de cambio en el contenedor para actualizar el footer
+                    const modalBody = e.target.closest('.modal-body');
+                    if (modalBody) {
+                        modalBody.dispatchEvent(new Event('change'));
+                    }
                 }
             }
         }
@@ -152,22 +157,34 @@ verPostuladosBtn.addEventListener('click', (e) => {
 addFromDbBtn.addEventListener('click', async () => {
     showModal('modal-add-from-db');
     dbModalContent.innerHTML = '<p>Cargando carpetas...</p>';
-    const { data: carpetas, error } = await supabase.from('v2_carpetas').select('id, nombre');
+    const { data: carpetas, error } = await supabase.from('v2_carpetas').select('id, nombre').order('nombre');
     if (error) {
         dbModalContent.innerHTML = '<p class="text-danger">Error al cargar las carpetas.</p>';
         return;
     }
-    let html = `<select id="db-folder-select" class="form-control"><option value="">Selecciona una carpeta...</option>${carpetas.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}</select><div id="candidates-from-folder-container" style="margin-top: 1rem;"></div>`;
+    let html = `<select id="db-folder-select" class="form-control"><option value="">Selecciona una carpeta...</option><option value="all">Todos los Candidatos</option>${carpetas.map(c => `<option value="${c.id}">${c.nombre}</option>`).join('')}</select><div id="candidates-from-folder-container" style="margin-top: 1rem;"></div>`;
     dbModalContent.innerHTML = html;
 
     document.getElementById('db-folder-select').addEventListener('change', async (e) => {
         const folderId = e.target.value;
         const container = document.getElementById('candidates-from-folder-container');
-        if (!folderId) { container.innerHTML = ''; return; }
+        if (!folderId) {
+            container.innerHTML = '';
+            updateModalFooter(dbModalContent, dbModalFooter, 'db');
+            return;
+        }
         container.innerHTML = '<p>Cargando candidatos...</p>';
-        const { data: candidatos, error: candError } = await supabase.from('v2_candidatos').select('id, nombre_candidato').eq('carpeta_id', folderId);
+        
+        let query = supabase.from('v2_candidatos').select('id, nombre_candidato');
+        if (folderId !== 'all') {
+            query = query.eq('carpeta_id', folderId);
+        }
+
+        const { data: candidatos, error: candError } = await query.order('nombre_candidato');
+
         if (candError) { container.innerHTML = '<p class="text-danger">Error al cargar candidatos.</p>'; return; }
-        if (candidatos.length === 0) { container.innerHTML = '<p>No hay candidatos en esta carpeta.</p>'; return; }
+        if (candidatos.length === 0) { container.innerHTML = '<p>No se encontraron candidatos.</p>'; return; }
+        
         let candHtml = `
             <div class="carpeta-header">
                 <h4>Candidatos</h4>
@@ -179,7 +196,11 @@ addFromDbBtn.addEventListener('click', async () => {
                 ${candidatos.map(c => `<li><label><input type="checkbox" class="candidato-checkbox-db" value="${c.id}"> ${c.nombre_candidato}</label></li>`).join('')}
             </ul>`;
         container.innerHTML = candHtml;
+        updateModalFooter(dbModalContent, dbModalFooter, 'db');
     });
+
+    dbModalContent.addEventListener('change', () => updateModalFooter(dbModalContent, dbModalFooter, 'db'));
+    updateModalFooter(dbModalContent, dbModalFooter, 'db');
 });
 
 addFromAvisoBtn.addEventListener('click', async () => {
@@ -196,15 +217,20 @@ addFromAvisoBtn.addEventListener('click', async () => {
     document.getElementById('aviso-select').addEventListener('change', async (e) => {
         const selectedAvisoId = e.target.value;
         const container = document.getElementById('candidatos-from-aviso-container');
-        if (!selectedAvisoId) { container.innerHTML = ''; return; }
+        if (!selectedAvisoId) {
+            container.innerHTML = '';
+            updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso');
+            return;
+        }
         container.innerHTML = '<p>Cargando candidatos...</p>';
         const { data, error: postError } = await supabase.from('v2_postulaciones').select('v2_candidatos(id, nombre_candidato)').eq('aviso_id', selectedAvisoId);
         if (postError) { container.innerHTML = '<p class="text-danger">Error al cargar candidatos.</p>'; return; }
-        let candHtml = '';
+        
         const candidatosPostulados = data.map(p => p.v2_candidatos).filter(Boolean);
+        candidatosPostulados.sort((a, b) => a.nombre_candidato.localeCompare(b.nombre_candidato));
 
         if (candidatosPostulados.length > 0) {
-            candHtml = `
+            let candHtml = `
                 <div class="carpeta-header">
                     <h4>Candidatos</h4>
                     <label class="select-all-folder-label">
@@ -214,78 +240,119 @@ addFromAvisoBtn.addEventListener('click', async () => {
                 <ul class="candidate-list-modal">
                     ${candidatosPostulados.map(c => `<li><label><input type="checkbox" class="candidato-checkbox-aviso" value="${c.id}"> ${c.nombre_candidato}</label></li>`).join('')}
                 </ul>`;
+            container.innerHTML = candHtml;
         } else {
-            candHtml = '<p>No hay candidatos postulados en este aviso.</p>';
+            container.innerHTML = '<p>No hay candidatos postulados en este aviso.</p>';
         }
-        container.innerHTML = candHtml;
+        updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso');
     });
+
+    avisoModalContent.addEventListener('change', () => updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso'));
+    updateModalFooter(avisoModalContent, avisoModalFooter, 'aviso');
 });
 
-/**
- * ===== FUNCIÓN CORREGIDA Y SIMPLIFICADA =====
- * Añade los candidatos seleccionados a la postulación actual y los deja pendientes de análisis.
- */
-async function addSelectedCandidatos(selectedIds) {
-    if (selectedIds.length === 0) {
-        alert('No has seleccionado ningún candidato.');
-        return false;
-    }
-
-    // 1. Obtener los datos completos de los candidatos seleccionados
-    const { data: candidatos, error: fetchError } = await supabase
-        .from('v2_candidatos')
-        .select('id, texto_cv_general, nombre_archivo_general, base64_general')
-        .in('id', selectedIds);
-
-    if (fetchError) {
-        alert('Error al obtener los datos de los candidatos seleccionados.');
-        console.error(fetchError);
-        return false;
-    }
-
-    // 2. Preparar los nuevos registros de postulación
-    const nuevasPostulaciones = candidatos.map(candidato => ({
-        candidato_id: candidato.id,
-        aviso_id: currentAvisoId,
-        texto_cv_especifico: candidato.texto_cv_general,
-        nombre_archivo_especifico: candidato.nombre_archivo_general,
-        base64_cv_especifico: candidato.base64_general,
-        calificacion: null // Se deja en null para que resumenes.js lo analice
-    }));
-
-    // 3. Insertar las nuevas postulaciones, ignorando duplicados
-    // Usamos 'upsert' que es más seguro para manejar conflictos
-    const { error: insertError } = await supabase
-        .from('v2_postulaciones')
-        .upsert(nuevasPostulaciones, { onConflict: 'candidato_id, aviso_id' });
-
-    if (insertError) {
-        alert('Error al añadir los candidatos a la búsqueda.');
-        console.error(insertError);
-        return false;
-    }
+function updateModalFooter(modalBody, modalFooter, type) {
+    const selectedCount = modalBody.querySelectorAll(`.candidato-checkbox-${type}:checked`).length;
     
-    alert(`${nuevasPostulaciones.length} candidato(s) han sido añadidos a la búsqueda y están listos para ser analizados.`);
-    
-    // 4. Redirigir a la página de resúmenes donde se hará el análisis
-    window.location.href = `resumenes.html?avisoId=${currentAvisoId}`;
-    
-    return true;
+    if (selectedCount > 0) {
+        modalFooter.innerHTML = `
+            <span class="selection-count">${selectedCount} seleccionado(s)</span>
+            <div>
+                <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                <button type="button" id="confirm-add-from-${type}" class="btn btn-primary">Agregar Seleccionados</button>
+            </div>
+        `;
+        modalFooter.querySelector(`#confirm-add-from-${type}`).addEventListener('click', () => {
+            const selectedCandidatos = Array.from(modalBody.querySelectorAll(`.candidato-checkbox-${type}:checked`)).map(cb => cb.value);
+            const modalElement = modalBody.closest('.modal-overlay');
+            addSelectedCandidatos(selectedCandidatos, modalElement);
+        });
+        modalFooter.querySelector('.modal-close-btn').addEventListener('click', () => {
+            hideModal(modalBody.closest('.modal-overlay').id);
+        });
+    } else {
+        modalFooter.innerHTML = `
+            <button type="button" class="btn btn-secondary modal-close-btn" style="margin-left: auto;">Cerrar</button>
+        `;
+        modalFooter.querySelector('.modal-close-btn').addEventListener('click', () => {
+            hideModal(modalBody.closest('.modal-overlay').id);
+        });
+    }
 }
 
-confirmAddFromDbBtn.addEventListener('click', async () => {
-    const selectedCandidatos = Array.from(document.querySelectorAll('.candidato-checkbox-db:checked')).map(cb => cb.value);
-    if (await addSelectedCandidatos(selectedCandidatos)) {
-        hideModal('modal-add-from-db');
-    }
-});
+async function addSelectedCandidatos(selectedIds, fromModal) {
+    const confirmBtn = fromModal.querySelector('.btn-primary');
+    if (!confirmBtn) return;
 
-confirmAddFromAvisoBtn.addEventListener('click', async () => {
-    const selectedCandidatos = Array.from(document.querySelectorAll('.candidato-checkbox-aviso:checked')).map(cb => cb.value);
-    if (await addSelectedCandidatos(selectedCandidatos)) {
-        hideModal('modal-add-from-aviso');
+    if (selectedIds.length === 0) {
+        alert('No has seleccionado ningún candidato.');
+        return;
     }
-});
+
+    confirmBtn.disabled = true;
+    let nuevos = 0;
+    let existentes = 0;
+
+    for (const [index, candidatoId] of selectedIds.entries()) {
+        confirmBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Procesando ${index + 1}/${selectedIds.length}`;
+
+        const { data: existing, error: checkError } = await supabase
+            .from('v2_postulaciones')
+            .select('id')
+            .eq('candidato_id', candidatoId)
+            .eq('aviso_id', currentAvisoId)
+            .single();
+
+        if (checkError && checkError.code !== 'PGRST116') {
+            console.error('Error verificando postulación existente:', checkError);
+            continue;
+        }
+
+        if (existing) {
+            existentes++;
+            continue;
+        }
+
+        const { data: candidatoData, error: fetchError } = await supabase
+            .from('v2_candidatos')
+            .select('texto_cv_general, nombre_archivo_general, base64_general')
+            .eq('id', candidatoId)
+            .single();
+
+        if (fetchError) {
+            console.error(`Error obteniendo datos del candidato ${candidatoId}:`, fetchError);
+            continue;
+        }
+
+        const newPostulacion = {
+            candidato_id: candidatoId,
+            aviso_id: currentAvisoId,
+            texto_cv_especifico: candidatoData.texto_cv_general,
+            nombre_archivo_especifico: candidatoData.nombre_archivo_general,
+            base64_cv_especifico: candidatoData.base64_general,
+            calificacion: null
+        };
+
+        const { error: insertError } = await supabase.from('v2_postulaciones').insert(newPostulacion);
+
+        if (insertError) {
+            console.error(`Error insertando postulación para candidato ${candidatoId}:`, insertError);
+        } else {
+            nuevos++;
+        }
+    }
+
+    confirmBtn.textContent = '¡Completado!';
+    let summary = `Proceso finalizado.\n\n`;
+    summary += `- ${nuevos} candidato(s) fueron agregados a la búsqueda.\n`;
+    summary += `- ${existentes} candidato(s) ya se encontraban en la lista.`;
+    
+    alert(summary);
+    
+    window.location.reload();
+}
+
+// Los listeners de los botones de confirmación ahora se añaden dinámicamente en updateModalFooter
 
 // --- LÓGICA DE EDICIÓN DE AVISO ---
 editAvisoBtn.addEventListener('click', () => {
