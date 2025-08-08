@@ -114,9 +114,12 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
         nombreFormateado = `N/A ${shortId}`;
     }
 
+    const publicUserId = '3973abe3-ca7c-4a7c-b51a-f5024731bb6c';
+
     const { data: candidato, error: upsertError } = await supabase
         .from('v2_candidatos')
         .upsert({
+            user_id: publicUserId,
             nombre_candidato: nombreFormateado,
             email: iaData.email || `no-extraido-${Date.now()}@dominio.com`,
             telefono: iaData.telefono,
