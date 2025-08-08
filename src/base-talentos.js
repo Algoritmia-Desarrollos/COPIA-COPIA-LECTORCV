@@ -37,6 +37,12 @@ const editTelefonoInput = document.getElementById('edit-telefono');
 const textModalTitle = document.getElementById('text-modal-title');
 const textModalBody = document.getElementById('text-modal-body');
 
+// Modal de Notas
+const notesForm = document.getElementById('notes-form');
+const notesCandidateIdInput = document.getElementById('notes-candidate-id');
+const newNoteTextarea = document.getElementById('new-note-textarea');
+const notesHistoryContainer = document.getElementById('notes-history-container');
+
 // --- ESTADO GLOBAL ---
 let carpetasCache = [];
 let currentFolderId = 'all';
@@ -93,8 +99,12 @@ window.addEventListener('DOMContentLoaded', async () => {
     cancelAddFolderBtn.addEventListener('click', () => toggleAddFolderForm(false));
     addFolderBtn.addEventListener('click', createNewFolder);
     editForm.addEventListener('submit', handleEditFormSubmit);
+    notesForm.addEventListener('submit', handleNotesFormSubmit);
 
     document.getElementById('select-all-matching-btn').addEventListener('click', selectAllMatching);
+
+    // Cerrar modales
+    document.getElementById('notes-modal-close').addEventListener('click', () => hideModal('notes-modal-container'));
 });
 
 
@@ -373,12 +383,15 @@ async function loadCandidates() {
     let query = supabase
         .from('v2_candidatos')
         .select(`
-            id, 
-            nombre_candidato, 
-            email, 
-            telefono, 
-            nombre_archivo_general, 
-            v2_carpetas(nombre)
+            id,
+            nombre_candidato,
+            email,
+            telefono,
+            ubicacion,
+            nombre_archivo_general,
+            estado,
+            v2_carpetas(nombre),
+            v2_notas_historial(count)
         `, { count: 'exact' });
 
     // Aplicar filtro de carpeta
@@ -450,14 +463,21 @@ function renderTable(candidatos) {
         talentosListBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No se encontraron candidatos.</td></tr>';
         return;
     }
+
     candidatos.forEach(candidato => {
         const row = document.createElement('tr');
         row.dataset.id = candidato.id;
-        
+        row.dataset.estado = candidato.estado; // Para aplicar estilos
+
+        const estadoClass = getEstadoClass(candidato.estado);
+
         row.innerHTML = `
             <td><input type="checkbox" class="candidate-checkbox" data-id="${candidato.id}"></td>
             <td>
-                <div class="candidate-name">${candidato.nombre_candidato || 'No extraído'}</div>
+                <div class="candidate-name-container">
+                    <span class="candidate-name ${estadoClass}">${candidato.nombre_candidato || 'No extraído'}</span>
+                    ${candidato.v2_notas_historial && candidato.v2_notas_historial.length > 0 && candidato.v2_notas_historial[0].count > 0 ? '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>' : ''}
+                </div>
                 <div class="candidate-filename">${candidato.nombre_archivo_general || 'No Identificado'}</div>
             </td>
             <td>${candidato.v2_carpetas?.nombre || '<em>Sin Carpeta</em>'}</td>
@@ -465,10 +485,10 @@ function renderTable(candidatos) {
                 <div style="white-space: normal;">${candidato.email || ''}</div>
                 <div class="text-light">${candidato.telefono || ''}</div>
             </td>
-            <td class="actions-group" style="text-align: right;">
-                <button class="btn btn-secondary btn-sm" data-action="view-text" title="Ver Texto del CV"><i class="fa-solid fa-file-lines"></i></button>
-                <button class="btn btn-primary btn-sm" data-action="view-cv" title="Ver CV Original"><i class="fa-solid fa-download"></i></button>
-                <button class="btn btn-secondary btn-sm" data-action="edit" title="Editar Contacto"><i class="fa-solid fa-pencil"></i></button>
+            <td class="actions-cell" style="text-align: center;">
+                <button class="btn btn-secondary btn-sm" data-action="toggle-actions">
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                </button>
             </td>
         `;
         addTableRowListeners(row);
@@ -492,9 +512,69 @@ function addTableRowListeners(row) {
     });
 
     row.querySelector('.candidate-checkbox')?.addEventListener('change', updateBulkActionsVisibility);
-    row.querySelector('[data-action="view-cv"]')?.addEventListener('click', (e) => { e.stopPropagation(); openCvPdf(row.dataset.id, e.currentTarget); });
-    row.querySelector('[data-action="view-text"]')?.addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
-    row.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
+    row.querySelector('[data-action="toggle-actions"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggleActionRow(row);
+    });
+}
+
+function toggleActionRow(row) {
+    const existingActionRow = document.getElementById(`actions-${row.dataset.id}`);
+    const candidateStatus = row.dataset.estado;
+    
+    // Close any open action rows
+    document.querySelectorAll('.actions-row').forEach(r => {
+        if (r.id !== `actions-${row.dataset.id}`) {
+            r.remove();
+        }
+    });
+
+    if (existingActionRow) {
+        existingActionRow.remove();
+    } else {
+        const actionRow = document.createElement('tr');
+        actionRow.id = `actions-${row.dataset.id}`;
+        actionRow.className = 'actions-row';
+        actionRow.innerHTML = `
+            <td colspan="5">
+                <div class="actions-container">
+                    <button class="btn btn-secondary btn-sm" data-action="view-text"><i class="fa-solid fa-file-lines"></i> Ver Texto CV</button>
+                    <button class="btn btn-primary btn-sm" data-action="view-cv"><i class="fa-solid fa-download"></i> Ver CV Original</button>
+                    <button class="btn btn-secondary btn-sm" data-action="edit"><i class="fa-solid fa-pencil"></i> Editar Contacto</button>
+                    <button class="btn btn-secondary btn-sm" data-action="notes"><i class="fa-solid fa-note-sticky"></i> Ver/Editar Notas</button>
+                    <div class="status-buttons">
+                        <button class="btn btn-sm ${candidateStatus === 'bueno' ? 'active' : ''}" data-action="set-status" data-status="bueno">Buen candidato</button>
+                        <button class="btn btn-sm ${candidateStatus === 'normal' ? 'active' : ''}" data-action="set-status" data-status="normal">Normal</button>
+                        <button class="btn btn-sm ${candidateStatus === 'prohibido' ? 'active' : ''}" data-action="set-status" data-status="prohibido">Prohibido</button>
+                        <button class="btn btn-sm ${!candidateStatus ? 'active' : ''}" data-action="set-status" data-status="">Limpiar</button>
+                    </div>
+                </div>
+            </td>
+        `;
+        row.insertAdjacentElement('afterend', actionRow);
+
+        actionRow.querySelector('[data-action="view-cv"]')?.addEventListener('click', (e) => { e.stopPropagation(); openCvPdf(row.dataset.id, e.currentTarget); });
+        actionRow.querySelector('[data-action="view-text"]')?.addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
+        actionRow.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
+        actionRow.querySelector('[data-action="notes"]')?.addEventListener('click', (e) => { e.stopPropagation(); openNotesModal(row.dataset.id); });
+        actionRow.querySelectorAll('[data-action="set-status"]').forEach(button => {
+            button.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const status = e.currentTarget.dataset.status;
+                updateCandidateStatus(row.dataset.id, status);
+                toggleActionRow(row);
+            });
+        });
+    }
+}
+
+function getEstadoClass(estado) {
+    switch (estado) {
+        case 'bueno': return 'status-bueno';
+        case 'prohibido': return 'status-prohibido';
+        case 'normal': return 'status-normal';
+        default: return '';
+    }
 }
 
 // --- ACCIONES EN LOTE Y MODALES ---
@@ -700,4 +780,81 @@ async function handleEditFormSubmit(e) {
     };
     const { error } = await supabase.from('v2_candidatos').update(updatedData).eq('id', id);
     if (error) { alert("Error al actualizar."); } else { hideModal('edit-modal-container'); loadCandidates(); }
+}
+
+async function openNotesModal(id) {
+    notesCandidateIdInput.value = id;
+    newNoteTextarea.value = '';
+    notesHistoryContainer.innerHTML = '<p>Cargando historial...</p>';
+    showModal('notes-modal-container');
+
+    const { data, error } = await supabase
+        .from('v2_notas_historial')
+        .select('nota, created_at')
+        .eq('candidato_id', id)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        notesHistoryContainer.innerHTML = '<p style="color: red;">Error al cargar el historial.</p>';
+        return;
+    }
+
+    if (data.length === 0) {
+        notesHistoryContainer.innerHTML = '<p>No hay notas anteriores.</p>';
+    } else {
+        notesHistoryContainer.innerHTML = data.map(nota => `
+            <div class="note-history-item" style="border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
+                <p style="white-space: pre-wrap; margin: 0;">${nota.nota}</p>
+                <small style="color: #888;">${new Date(nota.created_at).toLocaleString()}</small>
+            </div>
+        `).join('');
+    }
+}
+
+async function handleNotesFormSubmit(e) {
+    e.preventDefault();
+    const id = notesCandidateIdInput.value;
+    const newNote = newNoteTextarea.value.trim();
+
+    if (!newNote) {
+        alert('La nota no puede estar vacía.');
+        return;
+    }
+
+    const { error } = await supabase
+        .from('v2_notas_historial')
+        .insert({ candidato_id: id, nota: newNote });
+
+    if (error) {
+        alert("Error al guardar la nota.");
+    } else {
+        newNoteTextarea.value = '';
+        openNotesModal(id); // Recargar el historial
+        
+        // Asegurarse de que el ícono de nota esté visible en la tabla
+        const row = talentosListBody.querySelector(`tr[data-id='${id}']`);
+        if (row && !row.querySelector('.has-notes-icon')) {
+            const nameContainer = row.querySelector('.candidate-name-container');
+            nameContainer.insertAdjacentHTML('beforeend', '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>');
+        }
+    }
+}
+
+async function updateCandidateStatus(id, estado) {
+    const { error } = await supabase
+        .from('v2_candidatos')
+        .update({ estado: estado })
+        .eq('id', id);
+
+    if (error) {
+        alert('Error al actualizar el estado.');
+    } else {
+        // Actualizar la UI directamente para una respuesta más rápida
+        const row = talentosListBody.querySelector(`tr[data-id='${id}']`);
+        if (row) {
+            row.dataset.estado = estado;
+            const nameSpan = row.querySelector('.candidate-name');
+            nameSpan.className = `candidate-name ${getEstadoClass(estado)}`;
+        }
+    }
 }

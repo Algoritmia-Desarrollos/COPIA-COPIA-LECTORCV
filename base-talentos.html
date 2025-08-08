@@ -83,7 +83,7 @@
                     <th>Nombre Candidato</th>
                     <th>Ubicación</th>
                     <th>Contacto</th>
-                    <th style="text-align: right;">Acciones</th>
+                    <th style="text-align: center;">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="talentos-list-body"></tbody>
@@ -137,6 +137,30 @@
         <div id="text-modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 70vh; overflow-y: auto; background-color: var(--bg-light); padding: 1rem; border-radius: var(--radius-md);">
         </div>
     </div>
+</div>
+
+<div id="notes-modal-container" class="modal-overlay hidden">
+  <div class="modal-content">
+      <div class="modal-header">
+          <h2 id="notes-modal-title">Notas del Candidato</h2>
+          <button id="notes-modal-close" class="modal-close-btn">&times;</button>
+      </div>
+      <div class="modal-body">
+          <div id="notes-history-container" style="margin-bottom: 1.5rem; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 0.5rem;">
+              <!-- El historial de notas se cargará aquí -->
+          </div>
+          <form id="notes-form">
+              <input type="hidden" id="notes-candidate-id">
+              <div class="form-group">
+                  <label for="new-note-textarea">Agregar Nueva Nota</label>
+                  <textarea id="new-note-textarea" class="form-control" rows="4"></textarea>
+              </div>
+              <div class="form-actions" style="text-align: right;">
+                  <button type="submit" class="btn btn-primary">Guardar Nota</button>
+              </div>
+          </form>
+      </div>
+  </div>
 </div>
 
   <script>document.querySelector('.nav-toggle').addEventListener('click', () => {document.querySelector('.nav-menu').classList.toggle('active');});</script>

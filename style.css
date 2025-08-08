@@ -218,7 +218,7 @@ a:hover { color: var(--primary-hover); }
 }
 
 /* ===== TABLAS MEJORADAS ===== */
-.table-container { overflow-x: auto; }
+.table-container {  }
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -816,3 +816,132 @@ li.open > .folder-item .folder-toggle {
 .queue-item.status-error { background-color: #fef2f2; }
 .queue-item.status-error .status-icon { color: var(--danger-color); }
 .queue-item.status-error .status-badge { background-color: #fee2e2; color: #b91c1c; }
+
+/* --- 9. ESTILOS PARA BASE DE TALENTOS (Notas, Estados, Dropdown) --- */
+
+.actions-row td {
+    padding: 1rem;
+    background-color: #f8fafc;
+}
+
+.actions-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.status-buttons {
+    display: inline-flex;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    margin-left: auto;
+}
+
+.status-buttons .btn {
+    border-radius: 0;
+    border: none;
+    border-left: 1px solid var(--border-color);
+}
+
+.status-buttons .btn:first-child {
+    border-left: none;
+}
+
+.status-buttons .btn.active {
+    background-color: var(--primary-color);
+    color: var(--text-white);
+}
+
+.candidate-name-container {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.has-notes-icon {
+  color: var(--text-light);
+  font-size: 0.9em;
+}
+
+.candidate-name.status-bueno {
+  color: #16a34a !important; /* success-color */
+  font-weight: 600;
+}
+
+.candidate-name.status-prohibido {
+  color: #dc2626 !important; /* danger-color */
+  text-decoration: line-through;
+}
+
+.candidate-name.status-normal {
+    color: #000000 !important;
+}
+
+.actions-cell {
+  position: relative;
+}
+
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown-menu {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  background-color: var(--bg-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  min-width: 180px;
+  padding: 0.5rem 0;
+  border: 1px solid var(--border-color);
+  display: none; /* Oculto por defecto */
+}
+
+.dropdown-menu:not(.hidden) {
+    display: block;
+}
+
+.dropdown-item {
+  display: block;
+  padding: 0.75rem 1.25rem;
+  color: var(--text-main);
+  font-size: 0.875rem;
+  white-space: nowrap;
+}
+
+.dropdown-item:hover {
+  background-color: var(--bg-light);
+  color: var(--text-dark);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background-color: var(--border-color);
+  margin: 0.5rem 0;
+}
+
+.dropdown-submenu {
+  position: relative;
+}
+
+.dropdown-submenu:hover > .dropdown-menu-nested {
+  display: block;
+}
+
+.dropdown-menu-nested {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -0.5rem;
+  background-color: var(--bg-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  min-width: 160px;
+  padding: 0.5rem 0;
+  border: 1px solid var(--border-color);
+}
