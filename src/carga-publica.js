@@ -87,12 +87,15 @@ async function procesarCandidato(iaData, base64, textoCV, nombreArchivo) {
         nombreFormateado = `Candidato No Identificado ${Date.now()}`;
     }
 
+    const publicUserId = '3973abe3-ca7c-4a7c-b51a-f5024731bb6c';
+
     // Usamos 'upsert' para crear o actualizar el candidato en un solo paso.
     const { error } = await supabase
         .from('v2_candidatos')
         .upsert({
+            user_id: publicUserId,
             nombre_candidato: nombreFormateado,
-            email: iaData.email || 'no-extraido@dominio.com',
+            email: iaData.email || `no-extraido-${Date.now()}@dominio.com`,
             telefono: iaData.telefono,
             base64_general: base64,
             texto_cv_general: textoCV,
