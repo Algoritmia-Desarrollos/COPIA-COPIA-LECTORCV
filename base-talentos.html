@@ -56,9 +56,14 @@
                 <a href="carga-masiva.html" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar a Base de datos</a>
             </div>
 
-            <div class="filters-container" style="display: flex; gap: 1rem; margin-top: 1rem; margin-bottom: 1.5rem;">
-                <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
+            <div class="filters-container" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; margin-bottom: 1.5rem;">
+                <div class="form-group" style="flex-grow: 1; margin-bottom: 0; min-width: 250px;">
                     <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar por nombre, email o teléfono...">
+                </div>
+                <div class="form-group" style="flex-shrink: 0; margin-bottom: 0;">
+                    <select id="aviso-filter-select" class="form-control">
+                        <option value="all">Filtrar por aviso</option>
+                    </select>
                 </div>
                 <div class="form-group" style="flex-shrink: 0; margin-bottom: 0;">
                     <select id="sort-select" class="form-control">
@@ -83,24 +88,56 @@
                 </thead>
                 <tbody id="talentos-list-body"></tbody>
               </table>
+              <div id="select-all-matching-container" class="hidden" style="padding: 1rem; background-color: #eef2ff; text-align: center;">
+                <span id="select-all-page-message"></span>
+                <button id="select-all-matching-btn" class="btn btn-link" style="text-decoration: underline; color: var(--primary-color); font-weight: bold;">Seleccionar todos los que coincidan</button>
+              </div>
             </div>
 
-            <div id="table-pagination" class="table-pagination-footer hidden">
-              <button id="table-prev-page-btn" class="btn btn-secondary">Anterior</button>
-              <span id="table-page-indicator"></span>
-              <button id="table-next-page-btn" class="btn btn-secondary">Siguiente</button>
-            </div>
         </div>
       </div>
     </div>
   </main>
 
-  <div id="edit-modal-container" class="modal-container hidden">
-      <div class="modal-content"><div class="modal-header"><h2 id="edit-modal-title">Editar Candidato</h2><button id="edit-modal-close" class="modal-close-btn">&times;</button></div><form id="edit-form"><input type="hidden" id="edit-candidate-id"><div class="form-group"><label for="edit-nombre">Nombre Completo</label><input type="text" id="edit-nombre" class="form-control"></div><div class="form-group"><label for="edit-email">Email</label><input type="email" id="edit-email" class="form-control"></div><div class="form-group"><label for="edit-telefono">Teléfono</label><input type="text" id="edit-telefono" class="form-control"></div><div class="form-actions" style="text-align: right;"><button type="submit" class="btn btn-primary">Guardar Cambios</button></div></form></div>
-  </div>
-  <div id="text-modal-container" class="modal-container hidden">
-      <div class="modal-content" style="max-width: 800px;"><div class="modal-header"><h2 id="text-modal-title"></h2><button id="text-modal-close" class="modal-close-btn">&times;</button></div><div id="text-modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 70vh; overflow-y: auto; background-color: var(--bg-light); padding: 1rem; border-radius: var(--radius-md);"></div></div>
-  </div>
+  <div id="edit-modal-container" class="modal-overlay hidden">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 id="edit-modal-title">Editar Candidato</h2>
+            <button id="edit-modal-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="edit-form">
+                <input type="hidden" id="edit-candidate-id">
+                <div class="form-group">
+                    <label for="edit-nombre">Nombre Completo</label>
+                    <input type="text" id="edit-nombre" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="edit-email">Email</label>
+                    <input type="email" id="edit-email" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="edit-telefono">Teléfono</label>
+                    <input type="text" id="edit-telefono" class="form-control">
+                </div>
+                <div class="form-actions" style="text-align: right;">
+                    <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div id="text-modal-container" class="modal-overlay hidden">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <h2 id="text-modal-title"></h2>
+            <button id="text-modal-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div id="text-modal-body" class="modal-body" style="white-space: pre-wrap; max-height: 70vh; overflow-y: auto; background-color: var(--bg-light); padding: 1rem; border-radius: var(--radius-md);">
+        </div>
+    </div>
+</div>
 
   <script>document.querySelector('.nav-toggle').addEventListener('click', () => {document.querySelector('.nav-menu').classList.toggle('active');});</script>
   <script type="module" src="src/base-talentos.js"></script>

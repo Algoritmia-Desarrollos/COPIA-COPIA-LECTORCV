@@ -586,7 +586,7 @@ li.open > .folder-item .folder-toggle {
   box-sizing: border-box;
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.3s ease, visibility 0.3s ease;
+  transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
 .modal-overlay.visible {
@@ -594,7 +594,7 @@ li.open > .folder-item .folder-toggle {
   visibility: visible;
 }
 
-.modal-container {
+.modal-content {
   background: var(--bg-white);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -604,10 +604,11 @@ li.open > .folder-item .folder-toggle {
   display: flex;
   flex-direction: column;
   transform: scale(0.95);
-  transition: transform 0.3s ease;
+  transition: transform 0.15s ease;
+  overflow: hidden; /* Contiene el contenido del modal */
 }
 
-.modal-overlay.visible .modal-container {
+.modal-overlay.visible .modal-content {
     transform: scale(1);
 }
 
@@ -638,18 +639,21 @@ li.open > .folder-item .folder-toggle {
   line-height: 1;
 }
 
-.modal-content {
-  overflow-y: auto;
-  flex-grow: 1;
-  padding-right: 1rem; /* para el scrollbar */
-  display: flex;
-  flex-direction: column;
-}
-
 .modal-body {
+    padding: 0 1.5rem 1.5rem;
     overflow-y: auto;
     flex-grow: 1;
-    padding: 1.5rem;
+}
+
+.modal-footer {
+  padding: 1.5rem;
+  margin-top: auto; /* Empuja el footer hacia abajo */
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  background-color: var(--bg-light);
 }
 
 .modal-footer {

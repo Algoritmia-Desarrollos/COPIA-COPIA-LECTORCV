@@ -1,7 +1,7 @@
 // src/carga-masiva.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase } from './utils.js'; // Importamos la función de formato
+import { toTitleCase, extractTextFromFile } from './utils.js'; // Importamos las funciones de formato y extracción
 
 // --- SELECTORES DEL DOM ---
 const fileInput = document.getElementById('file-input-masivo');
@@ -180,10 +180,10 @@ async function processQueue() {
                 item.status = 'procesando';
                 updateQueueItemUI(item.id, 'procesando');
                 
-                const base64 = await fileToBase64(item.file);
-                const textoCV = await extraerTextoDePDF(base64);
+                const textoCV = await extractTextFromFile(item.file);
                 const iaData = await extraerDatosConIA(textoCV);
                 
+                const base64 = await fileToBase64(item.file);
                 const selectedFolderId = folderSelect.value ? parseInt(folderSelect.value, 10) : null;
                 await procesarCandidato(iaData, base64, textoCV, item.file.name, selectedFolderId);
 
@@ -235,62 +235,6 @@ async function procesarCandidato(iaData, base64, textoCV, nombreArchivo, carpeta
 
 // --- FUNCIONES AUXILIARES ---
 function fileToBase64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => res(r.result); r.onerror = e => rej(e); }); }
-async function extraerTextoDePDF(base64) {
-    let pdf;
-
-    // Cargar el documento PDF una sola vez
-    try {
-        pdf = await pdfjsLib.getDocument(base64).promise;
-    } catch (error) {
-        console.error("Error al cargar el documento PDF:", error);
-        throw new Error("No se pudo cargar el archivo PDF, puede estar corrupto.");
-    }
-
-    // --- INTENTO 1: Extracción de texto nativo ---
-    try {
-        let textoFinal = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            textoFinal += textContent.items.map(item => item.str).join(' ');
-        }
-        if (textoFinal.trim().length > 50) {
-            return textoFinal.trim().replace(/\x00/g, '');
-        }
-        console.warn("El texto nativo es muy corto, intentando OCR.");
-    } catch (error) {
-        console.warn("Extracción nativa fallida, se procederá con OCR.", error);
-    }
-
-    // --- INTENTO 2: OCR con Tesseract ---
-    try {
-        const worker = await Tesseract.createWorker('spa');
-        let textoCompleto = '';
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
-            
-            const { data: { text } } = await worker.recognize(canvas.toDataURL());
-            textoCompleto += text + '\n';
-        }
-
-        await worker.terminate();
-        if (textoCompleto.trim()) return textoCompleto;
-
-    } catch (ocrError) {
-        console.error("El proceso de OCR falló catastróficamente:", ocrError);
-        throw new Error("No se pudo procesar el PDF ni con OCR.");
-    }
-
-    throw new Error("El PDF parece estar vacío o no es legible.");
-}
 async function extraerDatosConIA(texto) {
     const textoLimpio = texto.replace(/\s+/g, ' ').trim();
     const prompt = `

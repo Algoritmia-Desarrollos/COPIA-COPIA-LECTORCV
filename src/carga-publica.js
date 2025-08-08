@@ -1,7 +1,7 @@
 // src/carga-publica.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase } from './utils.js'; // Importamos la función de formato
+import { toTitleCase, extractTextFromFile } from './utils.js'; // Importamos las funciones de formato y extracción
 
 // --- SELECTORES DEL DOM ---
 const fileInput = document.getElementById('file-input');
@@ -16,11 +16,22 @@ let selectedFile = null;
 
 // --- MANEJO DE ARCHIVOS ---
 function handleFile(file) {
-  if (file && file.type === 'application/pdf' && file.size <= 5 * 1024 * 1024) {
+  const validTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+  const maxSize = 5 * 1024 * 1024; // 5MB
+
+  if (file && validTypes.includes(file.type) && file.size <= maxSize) {
     selectedFile = file;
     dropZone.classList.add('file-selected');
+    
+    let iconClass = 'fa-solid fa-file-lines'; // Icono por defecto
+    if (file.type === 'application/pdf') {
+      iconClass = 'fa-solid fa-file-pdf';
+    } else if (file.type.startsWith('image/')) {
+      iconClass = 'fa-solid fa-file-image';
+    }
+
     fileLabelText.innerHTML = `
-      <i class="fa-solid fa-file-pdf" style="color: var(--success-color); font-size: 2rem; margin-bottom: 0.5rem;"></i>
+      <i class="${iconClass}" style="color: var(--success-color); font-size: 2rem; margin-bottom: 0.5rem;"></i>
       <span class="file-name">${selectedFile.name}</span>
       <span class="upload-hint" style="margin-top: 0.5rem;">¡Listo para enviar!</span>
     `;
@@ -33,10 +44,10 @@ function handleFile(file) {
     fileLabelText.innerHTML = `
       <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
       <span class="upload-text">Arrastra y suelta tu CV aquí o haz clic para seleccionar</span>
-      <span class="upload-hint">Solo archivos PDF, tamaño máximo: 5MB</span>
+      <span class="upload-hint">PDF o Imagen (JPG, PNG), máx: 5MB</span>
     `;
     if (file) {
-      alert("Por favor, selecciona un archivo PDF de menos de 5MB.");
+      alert("Por favor, selecciona un archivo PDF o de imagen (JPG, PNG) de menos de 5MB.");
     }
   }
 }
@@ -56,10 +67,12 @@ cvForm.addEventListener('submit', async (e) => {
     submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Procesando...';
 
     try {
-        const base64 = await fileToBase64(selectedFile);
-        const textoCV = await extraerTextoDePDF(base64);
+        // La nueva función maneja el archivo directamente
+        const textoCV = await extractTextFromFile(selectedFile);
         const iaData = await extraerDatosConIA(textoCV);
 
+        // Convertimos a base64 solo si es necesario para el almacenamiento
+        const base64 = await fileToBase64(selectedFile);
         await procesarCandidato(iaData, base64, textoCV, selectedFile.name);
         
         formView.classList.add('hidden');
@@ -117,30 +130,6 @@ function fileToBase64(file) {
     });
 }
 
-async function extraerTextoDePDF(base64) {
-    try {
-        const pdf = await pdfjsLib.getDocument(base64).promise;
-        let textoFinal = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            textoFinal += textContent.items.map(item => item.str).join(' ');
-        }
-        if (textoFinal.trim().length > 50) return textoFinal.trim().replace(/\x00/g, '');
-    } catch (error) {
-        console.warn("Extracción nativa fallida, intentando con OCR.", error);
-    }
-    
-    try {
-        const worker = await Tesseract.createWorker('spa');
-        const { data: { text } } = await worker.recognize(base64);
-        await worker.terminate();
-        return text || "Texto no legible por OCR";
-    } catch (error) {
-        console.error("Error de OCR:", error);
-        return "El contenido del PDF no pudo ser leído.";
-    }
-}
 
 async function extraerDatosConIA(textoCV) {
     const textoCVOptimizado = textoCV.substring(0, 4000);

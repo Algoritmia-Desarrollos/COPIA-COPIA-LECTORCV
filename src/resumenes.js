@@ -1,7 +1,7 @@
 // src/resumenes.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase, showModal, hideModal } from './utils.js';
+import { toTitleCase, showModal, hideModal, extractTextFromFile } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const panelTitle = document.getElementById('panel-title');
@@ -418,7 +418,7 @@ async function descargarCV(candidato, button) {
 uploadCvBtn.addEventListener('click', () => {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = 'application/pdf';
+    fileInput.accept = 'application/pdf,image/*'; // Aceptar también imágenes
     fileInput.multiple = true;
     fileInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
@@ -437,9 +437,9 @@ uploadCvBtn.addEventListener('click', () => {
 
         const processFile = async (file) => {
             try {
-                const base64 = await fileToBase64(file);
-                const textoCV = await extraerTextoDePDF(file);
+                const textoCV = await extractTextFromFile(file);
                 const iaData = await extraerDatosConIA(textoCV);
+                const base64 = await fileToBase64(file); // Aún necesario para almacenar
                 await procesarCandidatoYPostulacion(iaData, base64, textoCV, file.name, avisoActivo.id);
             } catch (error) {
                 console.error(`Error procesando ${file.name}:`, error);
@@ -576,63 +576,6 @@ function fileToBase64(file) {
         reader.onload = () => resolve(reader.result);
         reader.onerror = error => reject(error);
     });
-}
-async function extraerTextoDePDF(file) {
-    const fileArrayBuffer = await file.arrayBuffer();
-    let pdf;
-
-    // Cargar el documento PDF una sola vez
-    try {
-        pdf = await pdfjsLib.getDocument(fileArrayBuffer).promise;
-    } catch (error) {
-        console.error("Error al cargar el documento PDF:", error);
-        throw new Error("No se pudo cargar el archivo PDF, puede estar corrupto.");
-    }
-
-    // --- INTENTO 1: Extracción de texto nativo ---
-    try {
-        let textoFinal = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const textContent = await page.getTextContent();
-            textoFinal += textContent.items.map(item => item.str).join(' ');
-        }
-        if (textoFinal.trim().length > 50) {
-            return textoFinal.trim().replace(/\x00/g, '');
-        }
-        console.warn("El texto nativo es muy corto, intentando OCR.");
-    } catch (error) {
-        console.warn("Extracción nativa fallida, se procederá con OCR.", error);
-    }
-
-    // --- INTENTO 2: OCR con Tesseract ---
-    try {
-        const worker = await Tesseract.createWorker('spa');
-        let textoCompleto = '';
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 2.0 });
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.height = viewport.height;
-            canvas.width = viewport.width;
-
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
-            
-            const { data: { text } } = await worker.recognize(canvas.toDataURL());
-            textoCompleto += text + '\n';
-        }
-
-        await worker.terminate();
-        if (textoCompleto.trim()) return textoCompleto;
-
-    } catch (ocrError) {
-        console.error("El proceso de OCR falló catastróficamente:", ocrError);
-        throw new Error("No se pudo procesar el PDF ni con OCR.");
-    }
-
-    throw new Error("El PDF parece estar vacío o no es legible.");
 }
 async function extraerDatosConIA(texto) {
     const textoLimpio = texto.replace(/\s+/g, ' ').trim();

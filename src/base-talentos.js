@@ -10,12 +10,8 @@ const talentosListBody = document.getElementById('talentos-list-body');
 const filtroInput = document.getElementById('filtro-candidatos');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const sortSelect = document.getElementById('sort-select');
+const avisoFilterSelect = document.getElementById('aviso-filter-select');
 
-// Paginación
-const tablePagination = document.getElementById('table-pagination');
-const tablePageIndicator = document.getElementById('table-page-indicator');
-const tablePrevPageBtn = document.getElementById('table-prev-page-btn');
-const tableNextPageBtn = document.getElementById('table-next-page-btn');
 
 // Acciones en Lote
 const bulkActionsContainer = document.getElementById('bulk-actions-container');
@@ -44,16 +40,19 @@ const textModalBody = document.getElementById('text-modal-body');
 // --- ESTADO GLOBAL ---
 let carpetasCache = [];
 let currentFolderId = 'all';
-let currentPage = 1;
-const rowsPerPage = 100;
 let totalCandidates = 0;
 let currentSearchTerm = '';
 let currentSort = { column: 'created_at', ascending: false };
 let isUnreadFilterActive = false;
-
+let currentAvisoId = 'all';
+let allMatchingIds = [];
+let isSelectAllMatchingActive = false;
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
-    await loadFolders();
+    await Promise.all([
+        loadFolders(),
+        loadAvisos()
+    ]);
     handleFolderClick('all', 'Todos los Candidatos', folderList.querySelector("[data-folder-id='all']"));
 
     let searchTimeout;
@@ -62,6 +61,8 @@ window.addEventListener('DOMContentLoaded', async () => {
         searchTimeout = setTimeout(() => {
             currentPage = 1;
             currentSearchTerm = filtroInput.value;
+            allDataLoaded = false;
+            talentosListBody.innerHTML = '';
             loadCandidates();
         }, 500);
     });
@@ -76,11 +77,15 @@ window.addEventListener('DOMContentLoaded', async () => {
             currentSort = { column, ascending: order === 'asc' };
         }
         currentPage = 1;
+        allDataLoaded = false;
+        talentosListBody.innerHTML = '';
         loadCandidates();
     });
 
-    tablePrevPageBtn.addEventListener('click', () => changePage(-1));
-    tableNextPageBtn.addEventListener('click', () => changePage(1));
+    avisoFilterSelect.addEventListener('change', () => {
+        currentAvisoId = avisoFilterSelect.value;
+        loadCandidates();
+    });
     selectAllCheckbox.addEventListener('change', handleSelectAll);
     bulkMoveBtn.addEventListener('click', handleBulkMove);
     bulkDeleteBtn.addEventListener('click', handleBulkDelete);
@@ -88,6 +93,8 @@ window.addEventListener('DOMContentLoaded', async () => {
     cancelAddFolderBtn.addEventListener('click', () => toggleAddFolderForm(false));
     addFolderBtn.addEventListener('click', createNewFolder);
     editForm.addEventListener('submit', handleEditFormSubmit);
+
+    document.getElementById('select-all-matching-btn').addEventListener('click', selectAllMatching);
 });
 
 
@@ -350,7 +357,6 @@ async function deleteFolder(id) {
 
 function handleFolderClick(id, name, element) {
     currentFolderId = id;
-    currentPage = 1;
     currentSearchTerm = '';
     filtroInput.value = '';
     folderTitle.textContent = name;
@@ -359,12 +365,9 @@ function handleFolderClick(id, name, element) {
     loadCandidates();
 }
 
-// --- LÓGICA DE CANDIDATOS CON PAGINACIÓN Y BÚSQUEDA CORREGIDA ---
+// --- LÓGICA DE CANDIDATOS ---
 async function loadCandidates() {
     talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
-
-    const startIndex = (currentPage - 1) * rowsPerPage;
-    const endIndex = startIndex + rowsPerPage - 1;
 
     // Construir la consulta base pidiendo el conteo total
     let query = supabase
@@ -385,6 +388,32 @@ async function loadCandidates() {
         query = query.eq('carpeta_id', currentFolderId);
     }
 
+    // Aplicar filtro de aviso si no es 'all'
+    if (currentAvisoId !== 'all') {
+        const { data: postulaciones, error: postError } = await supabase
+            .from('v2_postulaciones')
+            .select('candidato_id')
+            .eq('aviso_id', currentAvisoId);
+
+        if (postError) {
+            console.error("Error al obtener postulaciones para el filtro:", postError);
+            talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Error al filtrar por aviso.</td></tr>`;
+            return;
+        }
+
+        const candidateIds = postulaciones.map(p => p.candidato_id).filter(id => id !== null);
+
+        if (candidateIds.length > 0) {
+            query = query.in('id', candidateIds);
+        } else {
+            // Si no hay candidatos para ese aviso, mostrar tabla vacía y salir.
+            totalCandidates = 0;
+            renderTable([]);
+            setupPagination();
+            return;
+        }
+    }
+
     // Aplicar filtro de búsqueda
     if (currentSearchTerm) {
         const searchTerm = `%${currentSearchTerm}%`;
@@ -397,8 +426,8 @@ async function loadCandidates() {
         query = query.like('nombre_candidato', 'Candidato No Identificado%');
     }
 
-    // Aplicar paginación y orden después de los filtros
-    query = query.range(startIndex, endIndex).order(currentSort.column, { ascending: currentSort.ascending });
+    // Aplicar orden después de los filtros
+    query = query.order(currentSort.column, { ascending: currentSort.ascending });
 
     // Ejecutar la consulta una sola vez
     const { data, error, count } = await query;
@@ -411,21 +440,12 @@ async function loadCandidates() {
 
     totalCandidates = count;
     renderTable(data);
-    setupPagination();
-}
-
-function changePage(direction) {
-    const totalPages = Math.ceil(totalCandidates / rowsPerPage);
-    const newPage = currentPage + direction;
-    if (newPage > 0 && newPage <= totalPages) {
-        currentPage = newPage;
-        loadCandidates();
-    }
 }
 
 // --- RENDERIZADO Y UI ---
 function renderTable(candidatos) {
     talentosListBody.innerHTML = '';
+
     if (!candidatos || candidatos.length === 0) {
         talentosListBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No se encontraron candidatos.</td></tr>';
         return;
@@ -456,13 +476,6 @@ function renderTable(candidatos) {
     });
 }
 
-function setupPagination() {
-    const totalPages = Math.ceil(totalCandidates / rowsPerPage);
-    tablePagination.classList.toggle('hidden', totalPages <= 1);
-    tablePageIndicator.textContent = `Página ${currentPage} de ${totalPages}`;
-    tablePrevPageBtn.disabled = currentPage === 1;
-    tableNextPageBtn.disabled = currentPage >= totalPages;
-}
 
 function addTableRowListeners(row) {
     row.draggable = true;
@@ -485,14 +498,75 @@ function addTableRowListeners(row) {
 }
 
 // --- ACCIONES EN LOTE Y MODALES ---
-function getSelectedIds() { return Array.from(talentosListBody.querySelectorAll('.candidate-checkbox:checked')).map(cb => cb.dataset.id); }
-function updateBulkActionsVisibility() { 
-    const selectedCount = getSelectedIds().length;
-    bulkActionsContainer.classList.toggle('hidden', selectedCount === 0); 
-    selectionCount.textContent = `(${selectedCount} seleccionados)`;
+function getSelectedIds() {
+    if (isSelectAllMatchingActive) {
+        return allMatchingIds;
+    }
+    return Array.from(talentosListBody.querySelectorAll('.candidate-checkbox:checked')).map(cb => cb.dataset.id);
 }
+
+function updateBulkActionsVisibility() {
+    const selectedCount = isSelectAllMatchingActive ? allMatchingIds.length : getSelectedIds().length;
+    bulkActionsContainer.classList.toggle('hidden', selectedCount === 0);
+    selectionCount.textContent = `(${selectedCount} seleccionados)`;
+
+    const selectAllContainer = document.getElementById('select-all-matching-container');
+    const selectAllPageMessage = document.getElementById('select-all-page-message');
+
+    if (selectAllCheckbox.checked && totalCandidates > rowsPerPage) {
+        selectAllContainer.classList.remove('hidden');
+        if (isSelectAllMatchingActive) {
+            selectAllPageMessage.textContent = `Todos los ${allMatchingIds.length} candidatos que coinciden están seleccionados.`;
+            document.getElementById('select-all-matching-btn').classList.add('hidden');
+        } else {
+            selectAllPageMessage.textContent = `Se han seleccionado los ${getSelectedIds().length} candidatos de esta página.`;
+            document.getElementById('select-all-matching-btn').classList.remove('hidden');
+        }
+    } else {
+        selectAllContainer.classList.add('hidden');
+    }
+}
+
 function handleSelectAll() {
+    isSelectAllMatchingActive = false; // Resetear al cambiar la selección de página
     talentosListBody.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = selectAllCheckbox.checked);
+    updateBulkActionsVisibility();
+}
+
+async function selectAllMatching() {
+    // Construir la misma consulta que `loadCandidates` pero solo para obtener IDs
+    let query = supabase.from('v2_candidatos').select('id', { count: 'exact' });
+
+    // Re-aplicar todos los filtros activos
+    if (currentFolderId === 'none') query = query.is('carpeta_id', null);
+    else if (currentFolderId !== 'all') query = query.eq('carpeta_id', currentFolderId);
+
+    if (currentAvisoId !== 'all') {
+        const { data: postulaciones, error: postError } = await supabase.from('v2_postulaciones').select('candidato_id').eq('aviso_id', currentAvisoId);
+        if (postError) { console.error("Error en filtro de aviso:", postError); return; }
+        const candidateIds = postulaciones.map(p => p.candidato_id).filter(id => id !== null);
+        if (candidateIds.length > 0) query = query.in('id', candidateIds);
+        else query = query.eq('id', -1);
+    }
+
+    if (currentSearchTerm) {
+        const searchTerm = `%${currentSearchTerm}%`;
+        query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
+    }
+
+    if (isUnreadFilterActive) {
+        query = query.like('nombre_candidato', 'Candidato No Identificado%');
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+        alert("Error al seleccionar todos los candidatos.");
+        return;
+    }
+
+    allMatchingIds = data.map(c => c.id.toString());
+    isSelectAllMatchingActive = true;
     updateBulkActionsVisibility();
 }
 async function handleBulkMove() {
@@ -545,21 +619,75 @@ async function openCvPdf(id, buttonElement) {
     }
 }
 async function openTextModal(id) {
-    const { data, error } = await supabase.from('v2_candidatos').select('nombre_candidato, texto_cv_general').eq('id', id).single();
-    if (error || !data) { alert('No se pudo cargar el texto del CV.'); return; }
+    // 1. Mostrar el modal inmediatamente con contenido vacío
+    textModalTitle.textContent = '';
+    textModalBody.textContent = '';
+    showModal('text-modal-container');
+
+    // 2. Obtener los datos de forma asíncrona
+    const { data, error } = await supabase
+        .from('v2_candidatos')
+        .select('nombre_candidato, texto_cv_general')
+        .eq('id', id)
+        .single();
+
+    // 3. Actualizar el contenido del modal cuando los datos estén listos
+    if (error || !data) {
+        textModalTitle.textContent = 'Error';
+        textModalBody.textContent = 'No se pudo cargar el texto del CV.';
+        console.error('Error fetching text modal data:', error);
+        return;
+    }
+    
     textModalTitle.textContent = `Texto de: ${data.nombre_candidato}`;
     textModalBody.textContent = data.texto_cv_general || 'No hay texto extraído.';
-    showModal('text-modal-container');
 }
 
 async function openEditModal(id) {
-    const { data, error } = await supabase.from('v2_candidatos').select('id, nombre_candidato, email, telefono').eq('id', id).single();
-    if (error || !data) { alert('No se pudo cargar el candidato.'); return; }
-    editCandidateIdInput.value = data.id;
+    // 1. Mostrar el modal inmediatamente con el formulario vacío
+    editCandidateIdInput.value = id;
+    editNombreInput.value = '';
+    editEmailInput.value = '';
+    editTelefonoInput.value = '';
+    showModal('edit-modal-container');
+
+    // 2. Obtener los datos de forma asíncrona
+    const { data, error } = await supabase
+        .from('v2_candidatos')
+        .select('nombre_candidato, email, telefono')
+        .eq('id', id)
+        .single();
+
+    // 3. Rellenar el formulario cuando los datos estén listos
+    if (error || !data) {
+        alert('No se pudo cargar la información del candidato.');
+        hideModal('edit-modal-container');
+        return;
+    }
+
     editNombreInput.value = data.nombre_candidato || '';
     editEmailInput.value = data.email || '';
     editTelefonoInput.value = data.telefono || '';
-    showModal('edit-modal-container');
+}
+
+async function loadAvisos() {
+    const { data, error } = await supabase
+        .from('v2_avisos')
+        .select('id, titulo')
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error al cargar avisos:", error);
+        return;
+    }
+
+    avisoFilterSelect.innerHTML = '<option value="all">Todos los Avisos</option>';
+    data.forEach(aviso => {
+        const option = document.createElement('option');
+        option.value = aviso.id;
+        option.textContent = aviso.titulo;
+        avisoFilterSelect.appendChild(option);
+    });
 }
 
 async function handleEditFormSubmit(e) {
