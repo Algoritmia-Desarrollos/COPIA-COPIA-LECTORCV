@@ -243,7 +243,24 @@ async function analizarPostulantesPendientes() {
 
 async function calificarCVConIA(textoCV, aviso) {
     const textoCVOptimizado = textoCV.substring(0, 12000);
-    const contextoAviso = `Puesto: ${aviso.titulo}, Descripción: ${aviso.descripcion}, Condiciones Necesarias: ${aviso.condiciones_necesarias.join(', ')}, Condiciones Deseables: ${aviso.condiciones_deseables.join(', ')}`;
+    const condicionesNecesariasTexto = aviso.condiciones_necesarias
+        .map((req, index) => `${index + 1}. ${req}`)
+        .join('\n');
+
+    const condicionesDeseablesTexto = aviso.condiciones_deseables
+        .map((req, index) => `${index + 1}. ${req}`)
+        .join('\n');
+
+    const contextoAviso = `
+Puesto: ${aviso.titulo}
+Descripción: ${aviso.descripcion}
+
+Condiciones Necesarias (INDISPENSABLES):
+${condicionesNecesariasTexto}
+
+Condiciones Deseables:
+${condicionesDeseablesTexto}
+    `;
 
     // --- PROMPT MODIFICADO ---
     // Se agregan p_indispensables, p_deseables y p_alineamiento como claves numéricas
@@ -305,9 +322,33 @@ Devuelve **solo** el objeto JSON. Sé muy claro en la justificación sobre CÓMO
   "p_deseables": <numero float con 2 decimales>,
   "p_alineamiento": <numero entero>,
   "calificacion": <entero 0-100 (tu mejor cálculo inicial)>,
-  "justificacion": "<Un texto detallado que incluya: (a) El estado de cada requisito indispensable ('cumplido'/'no cumplido') y POR QUÉ tomaste esa decisión. (b) El desglose de los puntos deseables y de alineamiento. (c) Una conclusión final clara ('recomendar' o 'descartar') basada en el puntaje total.>"
-}
+
+
+
+  "justificacion": 
+Debe ser un resumen claro, conciso y visual usando Markdown y emojis. Prohibido párrafos largos.
+Usa estos emojis: ✅ para Cumplido, 🟠 para Parcial, ❌ para No Cumplido.
+Estructúralo EXACTAMENTE así:
+
+**CONCLUSIÓN:** [Recomendar/Descartar] - **Puntaje: [calificacion]/100**
+---
+**A) Requisitos Indispensables ([p_indispensables]/50 pts)**
+✅ [Nombre del requisito 1]: Cumplido.
+✅ [Nombre del requisito 2]: Cumplido. (Breve evidencia si es necesaria).
+
+**B) Competencias Deseables ([p_deseables]/30 pts)**
+Calcula el 'peso_unitario' (30 / número total de deseables). Luego, para cada ítem, asígnale los puntos correspondientes:
+✅ [Nombre de la competencia]: Cumplido (asigna el 'peso_unitario' completo como puntos).
+🟠 [Nombre de la competencia]: Parcial (asigna 'peso_unitario * 0.5' como puntos). Razón: [motivo breve].
+❌ [Nombre de la competencia]: No cumplido (asigna 0 puntos).
+
+**C) Alineamiento ([p_alineamiento]/20 pts)**
+Usa ✅ para el puntaje máximo, 🟠 para el intermedio y ❌ para el mínimo/cero.
+✅/🟠/❌ **Funciones:** [Alta/Media/Baja] ([puntos]/10 pts).
+✅/🟠/❌ **Experiencia:** [>3 años/1-3 años/<1 año] ([puntos]/5 pts).
+✅/❌ **Logros:** [Sí/No] ([puntos]/5 pts).
 `;
+
 
 
 
