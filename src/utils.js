@@ -8,17 +8,6 @@
  */
 // src/utils.js
 
-// Asignar eventos de cierre a todos los modales una vez que el DOM esté cargado.
-document.addEventListener('DOMContentLoaded', () => {
-    const allCloseButtons = document.querySelectorAll('.modal-close-btn');
-    allCloseButtons.forEach(button => {
-        const modal = button.closest('.modal-container, .modal-overlay');
-        if (modal) {
-            button.onclick = () => hideModal(modal.id);
-        }
-    });
-});
-
 export function toTitleCase(str) {
   if (!str || typeof str !== 'string') return null;
   return str.toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(word => {

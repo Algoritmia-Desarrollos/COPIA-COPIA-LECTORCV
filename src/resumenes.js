@@ -1,7 +1,7 @@
 // src/resumenes.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase, showModal, hideModal, extractTextFromFile } from './utils.js';
+import { toTitleCase, showModal, hideModal } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const panelTitle = document.getElementById('panel-title');
@@ -22,9 +22,6 @@ const modalResumenContent = document.getElementById('modal-resumen-content');
 const modalNotasTextarea = document.getElementById('modal-notas-textarea');
 const filtroInput = document.getElementById('filtro-candidatos');
 const sortSelect = document.getElementById('sort-select');
-const modalCloseBtns = document.querySelectorAll('.modal-close-btn');
-
-
 // --- ESTADO DE LA APLICACIÓN ---
 let avisoActivo = null;
 let postulacionesCache = [];
@@ -46,8 +43,13 @@ window.addEventListener('DOMContentLoaded', async () => {
         processingStatus.textContent = '';
     }
 
-    modalCloseBtns.forEach(btn => {
-        btn.addEventListener('click', () => hideModal('modal-container'));
+    document.body.addEventListener('click', (e) => {
+        if (e.target.matches('.modal-close-btn')) {
+            const modal = e.target.closest('.modal-overlay');
+            if (modal) {
+                hideModal(modal.id);
+            }
+        }
     });
 });
 
@@ -242,68 +244,116 @@ async function analizarPostulantesPendientes() {
 async function calificarCVConIA(textoCV, aviso) {
     const textoCVOptimizado = textoCV.substring(0, 12000);
     const contextoAviso = `Puesto: ${aviso.titulo}, Descripción: ${aviso.descripcion}, Condiciones Necesarias: ${aviso.condiciones_necesarias.join(', ')}, Condiciones Deseables: ${aviso.condiciones_deseables.join(', ')}`;
-const prompt = `
-Actúa como un "Talent Intelligence Analyst" y "Senior Partner de Reclutamiento" para una firma de consultoría estratégica de capital humano. Tu análisis debe ser quirúrgico, basado en evidencia y orientado a proporcionar inteligencia accionable. Tu misión es ejecutar un diagnóstico forense de un CV contra un perfil de búsqueda, produciendo un dictamen integral que fundamente la toma de decisiones.
 
-**Contexto de la Búsqueda (Job Description):**
+    // --- PROMPT MODIFICADO ---
+    // Se agregan p_indispensables, p_deseables y p_alineamiento como claves numéricas
+    // en el JSON de salida para que tu código pueda usarlas directamente.
+    const prompt = `
+
+
+
+    Eres un analista de RRHH experto, pragmático y muy hábil para interpretar CVs cuyo texto ha sido extraído de un PDF y puede estar desordenado. Tu misión es analizar el CV con inteligencia contextual y compararlo con el aviso de trabajo para devolver UN ÚNICO OBJETO JSON válido.
+
+### PRINCIPIOS GUÍA
+
+1.  **Principio de Evidencia Razonable (Más importante)**: Tu objetivo NO es la coincidencia literal, sino encontrar **evidencia fuerte y razonable** en el CV. Si el aviso pide "2 años de experiencia como operador" y el CV dice "Empresa X - Operador (2021-2024)", DEBES considerar el requisito como "cumplido" porque la evidencia (3 años en el rol) es clara.
+2.  **Interpretación Contextual**: El texto del CV puede estar fragmentado. Debes conectar la información. Por ejemplo, un puesto listado en una sección puede estar detallado con fechas en otra parte del documento. Asume que la información puede no estar junta.
+3.  **Regla de Inferencia Positiva (para ambigüedad)**: Si un candidato cumple casi todos los requisitos indispensables y uno de ellos es ambiguo o no se menciona explícitamente (pero tampoco se contradice), debes darle el beneficio de la duda, marcarlo como "cumplido" y explicar tu razonamiento en la justificación (Ej: "Requisito 'Trabajo en equipo' se considera cumplido por la descripción de sus roles en proyectos colaborativos").
+
+### ENTRADAS
+
+**JOB DESCRIPTION:**
 ${contextoAviso}
 
-**Texto del CV a Analizar:**
+**CV (texto extraído):**
 """${textoCVOptimizado}"""
----
 
-**METODOLOGÍA DE EVALUACIÓN ESTRATÉGICA Y SISTEMA DE PONDERACIÓN (SEGUIR CON MÁXIMO RIGOR):**
+### SISTEMA DE PUNTAJE (Nuevas Reglas Flexibles)
 
-**PASO 1: Extracción de Datos Fundamentales.**
-Primero, extrae los siguientes datos clave. Si un dato no está presente, usa null.
--   nombreCompleto: El nombre más prominente del candidato.
--   email: El correo electrónico más profesional que encuentres.
--   telefono: El número de teléfono principal, priorizando móviles.
+#### A) REQUISITOS INDISPENSABLES (máx. 50 puntos)
+- Primero, identifica el número total de requisitos indispensables listados en el aviso.
+- Para cada requisito, busca "evidencia razonable" en el CV para determinar si está "cumplido" o "no cumplido".
+- **Cálculo de Puntaje (p_indispensables):**
+    - Si se cumplen **TODOS** los requisitos indispensables -> **50 puntos**.
+    - Si se cumple el **total de requisitos MENOS UNO** (ej: 4 de 5, o 3 de 4) -> **25 puntos**.
+    - Si se cumplen **menos requisitos que el total - 1** (ej: 3 de 5, o 2 de 4) -> **0 puntos**.
 
-**PASO 2: Sistema de Calificación Ponderado y Regla de Knock-Out (Puntuación de 0 a 100).**
-Calcularás la nota final como la suma ponderada de las siguientes categorías, basándote SIEMPRE en la comparación del CV contra el aviso.
+#### B) COMPETENCIAS DESEABLES (máx. 30 puntos)
+- 'peso_unitario = 30 / total_deseables' (si no hay deseables, es 0).
+- Por cada competencia:
+    - "cumplida" (evidencia clara) -> sumar 'peso_unitario'.
+    - "parcial" (ej: pide "inglés avanzado" y CV dice "inglés intermedio") -> sumar 'peso_unitario * 0.5'.
+    - "no cumplida" o ambigua -> sumar 0.
+- 'p_deseables' = suma total (float con 2 decimales).
 
-**A. REQUISITOS INDISPENSABLES / EXCLUYENTES (Ponderación: 50 Puntos Máximo)**
-   - **Principio de Knock-Out:** Este es un filtro crítico.
-   - Comienza la evaluación de esta categoría con 0 puntos.
-   - Analiza CADA requisito indispensable listado en el aviso. Por CADA uno que el candidato CUMPLE de manera explícita y demostrable en su CV, suma los puntos correspondientes (50 Puntos / Total de Requisitos Indispensables).
-   - **REGLA DE ORO (NO NEGOCIABLE):** Si el candidato **NO CUMPLE CON EL 100% de los requisitos indispensables**, su calificación en esta categoría será la suma de los puntos obtenidos, y la **CALIFICACIÓN FINAL TOTAL no podrá exceder los 49 puntos**.
+#### C) ALINEAMIENTO (máx. 20 puntos)
+- Aplica el mismo principio de "evidencia razonable" aquí.
+1.  **coincidencia_funciones** (0, 5, 10): Compara las funciones del aviso con las responsabilidades descritas en el CV, aunque no usen las mismas palabras.
+2.  **experiencia_en_años** (0, 2, 5): Calcula la experiencia total en roles similares sumando los periodos indicados en el CV. >3 años -> 5; 1–3 años -> 2; <1 año o no calculable -> 0.
+3.  **logros_cuantificables** (0, 5): Si hay métricas de éxito (ej: "aumenté ventas", "reduje tiempos 30%") -> 5.
+- 'p_alineamiento' = suma de los tres.
 
-**B. COMPETENCIAS DESEABLES / VALORADAS (Ponderación: 25 Puntos Máximo)**
-   - Comienza con 0 puntos.
-   - Por CADA competencia deseable listada en el aviso que el candidato CUMPLE, suma los puntos correspondientes (25 Puntos / Total de Competencias Deseables). Si el cumplimiento es parcial, otorga la mitad de los puntos para esa competencia.
+### FORMATO DE SALIDA (JSON ÚNICO)
 
-**C. ANÁLISIS DE EXPERIENCIA, CALIDAD Y ALINEAMIENTO ESTRATÉGICO (Ponderación: 25 Puntos Máximo)**
-   - Comienza con 0 puntos. Evalúa la trayectoria profesional del CV en estricta relación con lo solicitado en el aviso:
-   - **Alineamiento de Rol y Funciones (hasta 10 puntos):** Compara el título y funciones del candidato con el puesto buscado.
-   - **Calidad del Perfil y Evidencia de Impacto (hasta 10 puntos):** Evalúa si el candidato presenta logros cuantificables, progresión y estabilidad, considerándolos como indicadores de su potencial para cumplir los objetivos del puesto descrito en el aviso.
-   - **Competencias Blandas Inferidas (hasta 5 puntos):** Evalúa si la redacción y estructura del CV sugieren la presencia de las competencias blandas solicitadas en el aviso.
+Devuelve **solo** el objeto JSON. Sé muy claro en la justificación sobre CÓMO llegaste a tus conclusiones.
 
-**PASO 3: Elaboración de la Justificación Comparativa.**
-Redacta un párrafo único y conciso para la clave "justificacion". Este párrafo debe explicar la calificación final centrándose exclusivamente en la comparación directa entre el CV y el aviso de trabajo. Cada afirmación debe estar anclada a un requisito o expectativa del puesto.
-
-Sigue esta estructura interna para el párrafo:
--   **Veredicto y Razón Principal:** Comienza con el resultado del análisis comparativo (Ej: "El candidato presenta un alto grado de ajuste con los requisitos del aviso."). Si se aplicó la regla de Knock-Out, justifícalo inmediatamente (Ej: "El candidato no avanza por no cumplir el requisito indispensable de...").
--   **Argumento Comparativo:** Justifica la puntuación obtenida en cada categoría, explicando qué requisitos específicos del aviso se cumplieron y cuáles no. Cada afirmación sobre el candidato debe estar vinculada a un punto del aviso.
-    -   *Ejemplo Correcto:* "Obtiene la puntuación máxima en indispensables al demostrar experiencia con 'Tecnología X' y 'Certificación Y', ambos listados como excluyentes. En deseables, cumple con 'Idioma Z' pero no presenta 'Metodología Agile', por lo que suma la mitad de los puntos. Su experiencia en un rol similar le otorga puntos de alineamiento."
-    -   *Ejemplo Incorrecto:* "El candidato es muy bueno y tiene mucha experiencia. Parece una persona proactiva."
--   **Conclusión y Recomendación Basada en el Ajuste:** Cierra con una recomendación que sea una consecuencia lógica del grado de ajuste demostrado. (Ej: "Dado el alto nivel de coincidencia, se recomienda avanzar a entrevista técnica." o "Debido a la falta de cumplimiento en requisitos clave, se recomienda descartar para esta posición.").
-
-**Formato de Salida (JSON estricto):**
-Devuelve un objeto JSON con 5 claves: "nombreCompleto", "email", "telefono", "calificacion" (el número entero final calculado) y "justificacion" (el string de texto único que contiene el dictamen comparativo).
+{
+  "nombreCompleto": "<string o null>",
+  "email": "<string o null>",
+  "telefono": "<string o null>",
+  "p_indispensables": <numero 0, 25 o 50>,
+  "p_deseables": <numero float con 2 decimales>,
+  "p_alineamiento": <numero entero>,
+  "calificacion": <entero 0-100 (tu mejor cálculo inicial)>,
+  "justificacion": "<Un texto detallado que incluya: (a) El estado de cada requisito indispensable ('cumplido'/'no cumplido') y POR QUÉ tomaste esa decisión. (b) El desglose de los puntos deseables y de alineamiento. (c) Una conclusión final clara ('recomendar' o 'descartar') basada en el puntaje total.>"
+}
 `;
+
+
+
+    // --- LLAMADA A LA IA ---
     const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
-    if (error) throw new Error("No se pudo conectar con la IA.");
+    if (error) {
+        throw new Error("No se pudo conectar con la IA.");
+    }
+
     try {
         const content = JSON.parse(data.message);
+
+        // --- CÁLCULO Y VALIDACIÓN EN JAVASCRIPT (LÓGICA ROBUSTA) ---
+
+        // 1. Extraer componentes numéricos de forma segura (si faltan, son 0)
+        const p_indispensables = Number(content.p_indispensables ?? 0);
+        const p_deseables = Number(content.p_deseables ?? 0);
+        const p_alineamiento = Number(content.p_alineamiento ?? 0);
+
+        // 2. Realizar la suma en tu código
+        const suma_float = p_indispensables + p_deseables + p_alineamiento;
+        
+        // 3. Calcular y limitar la calificación final (entre 0 y 100)
+        let calificacion_calculada = Math.round(suma_float);
+        calificacion_calculada = Math.max(0, Math.min(100, calificacion_calculada)); // Limita a [0, 100]
+
+        // --- VERIFICACIÓN Y CORRECCIÓN ---
+        let justificacionFinal = content.justificacion || "Sin justificación.";
+
+        // Si la calificación de la IA no coincide con nuestro cálculo, la corregimos.
+        if (Number(content.calificacion) !== calificacion_calculada) {
+            justificacionFinal += " CORRECCIÓN: calificacion ajustada a la sumatoria de componentes.";
+        }
+
+        // --- DEVOLVER RESULTADO FINAL Y VALIDADO ---
         return {
             nombreCompleto: content.nombreCompleto || 'No especificado',
             email: content.email || 'No especificado',
             telefono: content.telefono || 'No especificado',
-            calificacion: content.calificacion === undefined ? 0 : content.calificacion,
-            justificacion: content.justificacion || "Sin justificación."
+            calificacion: calificacion_calculada, // Usamos nuestro cálculo, que es 100% fiable
+            justificacion: justificacionFinal
         };
-    } catch (e) { throw new Error("La IA devolvió una respuesta inesperada."); }
+    } catch (e) {
+        console.error("Error al parsear la respuesta de la IA:", e);
+        throw new Error("La IA devolvió una respuesta con un formato inesperado.");
+    }
 }
 
 // --- RENDERIZADO Y UI ---
@@ -418,7 +468,7 @@ async function descargarCV(candidato, button) {
 uploadCvBtn.addEventListener('click', () => {
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
-    fileInput.accept = 'application/pdf,image/*'; // Aceptar también imágenes
+    fileInput.accept = 'application/pdf';
     fileInput.multiple = true;
     fileInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
@@ -437,9 +487,9 @@ uploadCvBtn.addEventListener('click', () => {
 
         const processFile = async (file) => {
             try {
-                const textoCV = await extractTextFromFile(file);
+                const base64 = await fileToBase64(file);
+                const textoCV = await extraerTextoDePDF(file);
                 const iaData = await extraerDatosConIA(textoCV);
-                const base64 = await fileToBase64(file); // Aún necesario para almacenar
                 await procesarCandidatoYPostulacion(iaData, base64, textoCV, file.name, avisoActivo.id);
             } catch (error) {
                 console.error(`Error procesando ${file.name}:`, error);
@@ -576,6 +626,63 @@ function fileToBase64(file) {
         reader.onload = () => resolve(reader.result);
         reader.onerror = error => reject(error);
     });
+}
+async function extraerTextoDePDF(file) {
+    const fileArrayBuffer = await file.arrayBuffer();
+    let pdf;
+
+    // Cargar el documento PDF una sola vez
+    try {
+        pdf = await pdfjsLib.getDocument(fileArrayBuffer).promise;
+    } catch (error) {
+        console.error("Error al cargar el documento PDF:", error);
+        throw new Error("No se pudo cargar el archivo PDF, puede estar corrupto.");
+    }
+
+    // --- INTENTO 1: Extracción de texto nativo ---
+    try {
+        let textoFinal = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            textoFinal += textContent.items.map(item => item.str).join(' ');
+        }
+        if (textoFinal.trim().length > 50) {
+            return textoFinal.trim().replace(/\x00/g, '');
+        }
+        console.warn("El texto nativo es muy corto, intentando OCR.");
+    } catch (error) {
+        console.warn("Extracción nativa fallida, se procederá con OCR.", error);
+    }
+
+    // --- INTENTO 2: OCR con Tesseract ---
+    try {
+        const worker = await Tesseract.createWorker('spa');
+        let textoCompleto = '';
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const viewport = page.getViewport({ scale: 2.0 });
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+
+            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            
+            const { data: { text } } = await worker.recognize(canvas.toDataURL());
+            textoCompleto += text + '\n';
+        }
+
+        await worker.terminate();
+        if (textoCompleto.trim()) return textoCompleto;
+
+    } catch (ocrError) {
+        console.error("El proceso de OCR falló catastróficamente:", ocrError);
+        throw new Error("No se pudo procesar el PDF ni con OCR.");
+    }
+
+    throw new Error("El PDF parece estar vacío o no es legible.");
 }
 async function extraerDatosConIA(texto) {
     const textoLimpio = texto.replace(/\s+/g, ' ').trim();

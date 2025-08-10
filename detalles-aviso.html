@@ -117,25 +117,27 @@
             </div>
             <div class="modal-body">
                 <form id="edit-aviso-form">
-                    <div class="form-group">
+                    <div class="form-group" style="grid-column: 1 / -1;">
                         <label for="edit-descripcion">Descripción del Puesto</label>
                         <textarea id="edit-descripcion" class="form-control" rows="5"></textarea>
                     </div>
-                    <div class="form-group">
-                        <label>Condiciones Necesarias (Excluyentes)</label>
-                        <div class="condition-input-group">
-                            <input type="text" id="edit-necesaria-input" class="form-control" placeholder="Añadir condición...">
-                            <button type="button" id="add-necesaria-btn-edit" class="btn btn-primary add-btn">+</button>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label>Condiciones Necesarias (Excluyentes)</label>
+                            <div class="condition-input-group">
+                                <input type="text" id="edit-necesaria-input" class="form-control" placeholder="Añadir condición...">
+                                <button type="button" id="add-necesaria-btn-edit" class="btn btn-primary add-btn">+</button>
+                            </div>
+                            <ul id="necesarias-list-edit" class="condition-list"></ul>
                         </div>
-                        <ul id="necesarias-list-edit" class="condition-list"></ul>
-                    </div>
-                    <div class="form-group">
-                        <label>Condiciones Deseables (Suman Puntos)</label>
-                        <div class="condition-input-group">
-                            <input type="text" id="edit-deseable-input" class="form-control" placeholder="Añadir condición...">
-                            <button type="button" id="add-deseable-btn-edit" class="btn btn-primary add-btn">+</button>
+                        <div class="form-group">
+                            <label>Condiciones Deseables (Suman Puntos)</label>
+                            <div class="condition-input-group">
+                                <input type="text" id="edit-deseable-input" class="form-control" placeholder="Añadir condición...">
+                                <button type="button" id="add-deseable-btn-edit" class="btn btn-primary add-btn">+</button>
+                            </div>
+                            <ul id="deseables-list-edit" class="condition-list"></ul>
                         </div>
-                        <ul id="deseables-list-edit" class="condition-list"></ul>
                     </div>
                     <div class="form-group">
                         <label for="edit-max-cv">Máximo de CVs (0 para ilimitado)</label>

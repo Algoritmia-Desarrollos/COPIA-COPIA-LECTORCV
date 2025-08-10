@@ -388,9 +388,22 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
 
 // --- LÓGICA DE EDICIÓN DE AVISO ---
 editAvisoBtn.addEventListener('click', () => {
+    if (!avisoActivo) return;
     showModal('modal-edit-aviso');
+    
+    // Poblar el formulario con los datos actuales del aviso
     document.getElementById('edit-descripcion').value = avisoActivo.descripcion;
-    // ... y el resto de la lógica de edición
+    document.getElementById('edit-max-cv').value = avisoActivo.max_cv || 0;
+    
+    // Formatear la fecha para el input type="date" (YYYY-MM-DD)
+    const fecha = new Date(avisoActivo.valido_hasta);
+    const anio = fecha.getUTCFullYear();
+    const mes = String(fecha.getUTCMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getUTCDate()).padStart(2, '0');
+    document.getElementById('edit-valido-hasta').value = `${anio}-${mes}-${dia}`;
+
+    renderEditList(document.getElementById('necesarias-list-edit'), avisoActivo.condiciones_necesarias);
+    renderEditList(document.getElementById('deseables-list-edit'), avisoActivo.condiciones_deseables);
 });
 
 function renderEditList(listElement, conditions) {
@@ -442,13 +455,21 @@ document.getElementById('add-deseable-btn-edit').addEventListener('click', () =>
 });
 
 confirmEditAvisoBtn.addEventListener('click', async () => {
+    const maxCvValue = document.getElementById('edit-max-cv').value;
+    
     const updatedData = {
         descripcion: document.getElementById('edit-descripcion').value,
-        condiciones_necesarias: Array.from(document.getElementById('necesarias-list-edit').children).map(li => li.textContent.slice(0, -1)),
-        condiciones_deseables: Array.from(document.getElementById('deseables-list-edit').children).map(li => li.textContent.slice(0, -1)),
-        max_cv: document.getElementById('edit-max-cv').value,
+        condiciones_necesarias: Array.from(document.getElementById('necesarias-list-edit').children).map(li => li.firstChild.textContent.trim()),
+        condiciones_deseables: Array.from(document.getElementById('deseables-list-edit').children).map(li => li.firstChild.textContent.trim()),
+        max_cv: maxCvValue ? parseInt(maxCvValue, 10) : null, // Convertir a número o null si está vacío
         valido_hasta: document.getElementById('edit-valido-hasta').value
     };
+
+    // Validar que la fecha no esté vacía
+    if (!updatedData.valido_hasta) {
+        alert('Por favor, especifica una fecha de validez.');
+        return;
+    }
 
     const { error } = await supabase.from('v2_avisos').update(updatedData).eq('id', currentAvisoId);
 
