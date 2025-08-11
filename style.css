@@ -552,12 +552,26 @@ li.open > .folder-item .folder-toggle {
     transform: translateY(100%);
     transition: transform 0.3s ease-in-out;
   }
-  .resumenes-layout.sidebar-visible .sidebar-wrapper.floating {
+.resumenes-layout.sidebar-visible .sidebar-wrapper.floating {
     transform: translateY(0);
   }
 }
 
 /* --- 7. ESTILOS PARA DETALLES DE AVISO Y MODALES --- */
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 992px) {
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
