@@ -220,25 +220,26 @@ async function analizarPostulantesPendientes() {
 
     const procesarLote = async () => {
         const lote = postulacionesNuevas.slice(currentIndex, currentIndex + CONCURRENCY_LIMIT);
-        if (lote.length === 0) {
-            if (currentIndex >= totalNuevas) {
-                processingStatus.textContent = `¡Análisis completado! Se han procesado ${totalNuevas} nuevos candidatos.`;
-            }
-            return;
+        
+        if (lote.length > 0) {
+            const start = currentIndex + 1;
+            const end = Math.min(currentIndex + lote.length, totalNuevas);
+            processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Analizando candidatos ${start}-${end} de ${totalNuevas}...`;
+
+            const promesas = lote.map(postulacion => analizarUnaPostulacion(postulacion));
+            await Promise.all(promesas);
+
+            currentIndex += lote.length;
+            
+            // Ceder el control al navegador antes de procesar el siguiente lote
+            setTimeout(procesarLote, 0); 
+        } else {
+            processingStatus.textContent = `¡Análisis completado! Se han procesado ${totalNuevas} nuevos candidatos.`;
         }
-
-        const start = currentIndex + 1;
-        const end = Math.min(currentIndex + lote.length, totalNuevas);
-        processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Analizando candidatos ${start}-${end} de ${totalNuevas}...`;
-
-        const promesas = lote.map(postulacion => analizarUnaPostulacion(postulacion));
-        await Promise.all(promesas);
-
-        currentIndex += lote.length;
-        await procesarLote(); // Llamada recursiva para el siguiente lote
     };
 
-    await procesarLote();
+    // Iniciar el primer lote
+    setTimeout(procesarLote, 0);
 }
 
 async function calificarCVConIA(textoCV, aviso) {
