@@ -69,6 +69,16 @@ window.addEventListener('DOMContentLoaded', async () => {
             }
         }
     });
+
+    // Listener global para cerrar modales
+    document.body.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-close-btn')) {
+            const modal = e.target.closest('.modal-overlay');
+            if (modal) {
+                hideModal(modal.id);
+            }
+        }
+    });
 });
 
 async function loadAvisoDetails(id, countFromUrl) {
@@ -254,15 +264,12 @@ async function setupModal(modal, contentEl, footerEl, type) {
 addFromDbBtn.addEventListener('click', () => setupModal(modalAddFromDb, dbModalContent, dbModalFooter, 'db'));
 addFromAvisoBtn.addEventListener('click', () => setupModal(modalAddFromAviso, avisoModalContent, avisoModalFooter, 'aviso'));
 
-// Listener de evento delegado en los footers de los modales
+// Listener de evento delegado en los footers de los modales para la acción de confirmar
 [dbModalFooter, avisoModalFooter].forEach(footer => {
     footer.addEventListener('click', (e) => {
         const target = e.target;
-        const modal = target.closest('.modal-overlay');
-        
-        if (target.matches('.modal-close-btn')) {
-            hideModal(modal.id);
-        } else if (target.matches('.confirm-add-btn')) {
+        if (target.matches('.confirm-add-btn')) {
+            const modal = target.closest('.modal-overlay');
             const type = target.dataset.type;
             const selectedCandidatos = Array.from(modal.querySelectorAll(`.candidato-checkbox-${type}:checked`)).map(cb => cb.value);
             addSelectedCandidatos(selectedCandidatos, modal);
@@ -289,19 +296,29 @@ function updateModalFooter(modalBody, modalFooter, type) {
 }
 
 async function addSelectedCandidatos(selectedIds, fromModal) {
-    const confirmBtn = fromModal.querySelector('.btn-primary');
-    if (!confirmBtn || confirmBtn.disabled) return;
+    const modalBody = fromModal.querySelector('.modal-body');
+    const modalFooter = fromModal.querySelector('.modal-footer');
+    const progressContainer = fromModal.querySelector('#aviso-modal-progress-container');
+    const progressBar = fromModal.querySelector('#aviso-modal-progress-bar');
+    const statusText = fromModal.querySelector('#aviso-modal-status-text');
+    const percentageText = fromModal.querySelector('#aviso-modal-percentage');
 
     if (selectedIds.length === 0) {
         alert('No has seleccionado ningún candidato.');
         return;
     }
 
-    confirmBtn.disabled = true;
-    confirmBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Preparando...`;
+    // 1. Ocultar UI de selección y mostrar UI de progreso
+    modalBody.classList.add('hidden');
+    modalFooter.classList.add('hidden');
+    progressContainer.classList.remove('hidden');
+    statusText.textContent = 'Iniciando proceso...';
+    progressBar.style.width = '0%';
+    percentageText.textContent = '0%';
 
     try {
-        // 1. Verificar en lote cuáles candidatos ya existen en la postulación actual.
+        // 2. Verificar candidatos existentes
+        statusText.textContent = 'Verificando candidatos existentes...';
         const { data: existingPostulaciones, error: checkError } = await supabase
             .from('v2_postulaciones')
             .select('candidato_id')
@@ -309,78 +326,75 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
             .in('candidato_id', selectedIds);
 
         if (checkError) {
-            throw new Error(`Error verificando postulaciones existentes: ${checkError.message}`);
+            throw new Error(`Error verificando postulaciones: ${checkError.message}`);
         }
 
         const existingCandidatoIds = new Set(existingPostulaciones.map(p => p.candidato_id));
-        // Convert selectedIds to numbers for correct comparison
         const nuevosCandidatoIds = selectedIds.map(Number).filter(id => !existingCandidatoIds.has(id));
         const existentes = selectedIds.length - nuevosCandidatoIds.length;
         let totalAgregados = 0;
 
         if (nuevosCandidatoIds.length === 0) {
-            alert(`Proceso finalizado.\n\n- 0 candidatos fueron agregados.\n- ${existentes} candidato(s) ya se encontraban en la lista.`);
-            confirmBtn.disabled = false;
-            confirmBtn.textContent = 'Agregar Seleccionados';
-            hideModal(fromModal.id);
+            statusText.innerHTML = `<strong>Proceso Finalizado</strong><br><br>
+                - 0 candidatos fueron agregados.<br>
+                - ${existentes} candidato(s) ya se encontraban en la lista.`;
+            percentageText.textContent = '';
+            progressBar.style.width = '100%';
+            progressBar.style.backgroundColor = 'var(--primary-color)';
+            modalFooter.innerHTML = `<button type="button" class="btn btn-primary" onclick="window.location.reload()">Cerrar y Recargar</button>`;
+            modalFooter.classList.remove('hidden');
             return;
         }
 
-        // 2. Procesar los nuevos candidatos en lotes para evitar timeouts.
-        const BATCH_SIZE = 50; // Lotes de 50 candidatos
+        // 3. Procesar nuevos candidatos en lotes
+        const BATCH_SIZE = 50;
         for (let i = 0; i < nuevosCandidatoIds.length; i += BATCH_SIZE) {
             const batchIds = nuevosCandidatoIds.slice(i, i + BATCH_SIZE);
             const progress = i + batchIds.length;
-            confirmBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Procesando ${progress}/${nuevosCandidatoIds.length}...`;
+            const percentage = Math.round((progress / nuevosCandidatoIds.length) * 100);
 
-            // 2a. Obtener datos del lote actual.
+            statusText.textContent = `Procesando ${progress} de ${nuevosCandidatoIds.length} candidatos...`;
+            progressBar.style.width = `${percentage}%`;
+            percentageText.textContent = `${percentage}% completado`;
+
             const { data: candidatosData, error: fetchError } = await supabase
                 .from('v2_candidatos')
                 .select('id, texto_cv_general, nombre_archivo_general, base64_general')
                 .in('id', batchIds);
 
-            if (fetchError) {
-                throw new Error(`Error obteniendo datos de los candidatos (lote ${i / BATCH_SIZE + 1}): ${fetchError.message}`);
-            }
+            if (fetchError) throw new Error(`Error obteniendo datos (lote ${i / BATCH_SIZE + 1}): ${fetchError.message}`);
 
-            // 2b. Preparar el lote de nuevas postulaciones.
-            const nuevasPostulaciones = candidatosData.map(candidatoData => ({
-                candidato_id: candidatoData.id,
+            const nuevasPostulaciones = candidatosData.map(c => ({
+                candidato_id: c.id,
                 aviso_id: currentAvisoId,
-                texto_cv_especifico: candidatoData.texto_cv_general,
-                nombre_archivo_especifico: candidatoData.nombre_archivo_general,
-                base64_cv_especifico: candidatoData.base64_general,
+                texto_cv_especifico: c.texto_cv_general,
+                nombre_archivo_especifico: c.nombre_archivo_general,
+                base64_cv_especifico: c.base64_general,
                 calificacion: null
             }));
 
-            // 2c. Insertar el lote actual.
-            const { error: insertError } = await supabase
-                .from('v2_postulaciones')
-                .insert(nuevasPostulaciones);
-
-            if (insertError) {
-                if (insertError.code === '23505') {
-                    throw new Error(`Error de duplicados al insertar (lote ${i / BATCH_SIZE + 1}): ${insertError.message}.`);
-                }
-                throw new Error(`Error insertando postulaciones (lote ${i / BATCH_SIZE + 1}): ${insertError.message}`);
-            }
+            const { error: insertError } = await supabase.from('v2_postulaciones').insert(nuevasPostulaciones);
+            if (insertError) throw new Error(`Error insertando postulaciones (lote ${i / BATCH_SIZE + 1}): ${insertError.message}`);
+            
             totalAgregados += nuevasPostulaciones.length;
         }
 
-        // 3. Mostrar resumen y recargar.
-        confirmBtn.textContent = '¡Completado!';
-        let summary = `Proceso finalizado.\n\n`;
-        summary += `- ${totalAgregados} candidato(s) fueron agregados a la búsqueda.\n`;
-        summary += `- ${existentes} candidato(s) ya se encontraban en la lista.`;
-        
-        alert(summary);
-        window.location.reload();
+        // 4. Mostrar resumen final
+        statusText.innerHTML = `<strong>¡Proceso Completado!</strong><br><br>
+            - <strong>${totalAgregados}</strong> candidato(s) fueron agregados a la búsqueda.<br>
+            - <strong>${existentes}</strong> candidato(s) ya se encontraban en la lista.`;
+        progressBar.style.backgroundColor = 'var(--success-color)';
+        percentageText.textContent = '¡Éxito!';
+        modalFooter.innerHTML = `<button type="button" class="btn btn-primary" onclick="window.location.reload()">Cerrar y Recargar</button>`;
+        modalFooter.classList.remove('hidden');
 
     } catch (error) {
         console.error("Error en el proceso de agregar candidatos:", error);
-        alert(`Ocurrió un error: ${error.message}`);
-        confirmBtn.disabled = false;
-        confirmBtn.textContent = 'Reintentar';
+        statusText.innerHTML = `<strong>Ocurrió un Error</strong><br><br>${error.message}`;
+        progressBar.style.backgroundColor = 'var(--danger-color)';
+        percentageText.textContent = 'Fallo';
+        modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" onclick="window.location.reload()">Cerrar e Intentar de Nuevo</button>`;
+        modalFooter.classList.remove('hidden');
     }
 }
 

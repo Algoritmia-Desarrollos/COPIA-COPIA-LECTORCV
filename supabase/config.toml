@@ -2,6 +2,10 @@
 
 # ... (otras configuraciones de tu proyecto)
 
+[db]
+  [db.pooler]
+    default_statement_timeout = "300s"
+
 [functions]
 # Función para el proxy de OpenAI que ya tienes
 [functions.openai]

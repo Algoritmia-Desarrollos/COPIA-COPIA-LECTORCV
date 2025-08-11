@@ -28,7 +28,7 @@ export function showSpinner(spinnerId = 'spinner') {
 
 /**
  * Oculta un elemento spinner.
- * @param {string} spinnerId - El ID del elemento spinner en el DOM.
+ * @param {string} spinnerId - El ID bdel elemento spinner en el DOM.
  */
 export function hideSpinner(spinnerId = 'spinner') {
     const spinner = document.getElementById(spinnerId);
@@ -73,30 +73,13 @@ export function showModal(modalId) {
  */
 export function hideModal(modalId) {
     const modalOverlay = document.getElementById(modalId);
-    if (!modalOverlay || !modalOverlay.classList.contains('visible')) {
-        return; // No hacer nada si ya está oculto.
+    if (!modalOverlay) {
+        return;
     }
-
+    
     modalOverlay.classList.remove('visible');
+    modalOverlay.classList.add('hidden');
     document.body.style.overflow = '';
-
-    // Función que se ejecutará cuando la transición de salida termine.
-    const onTransitionEnd = (event) => {
-        // Asegurarse de que el evento de transición es del propio overlay.
-        if (event.target === modalOverlay) {
-            modalOverlay.classList.add('hidden');
-            // Limpiar el listener para que no se ejecute múltiples veces.
-            modalOverlay.removeEventListener('transitionend', onTransitionEnd);
-        }
-    };
-
-    modalOverlay.addEventListener('transitionend', onTransitionEnd);
-
-    // Fallback por si el evento 'transitionend' no se dispara.
-    setTimeout(() => {
-        modalOverlay.classList.add('hidden');
-        modalOverlay.removeEventListener('transitionend', onTransitionEnd);
-    }, 200); // Ligeramente más largo que la duración de la transición (0.15s).
 }
 
 /**
