@@ -484,9 +484,33 @@ li.open > .folder-item .folder-toggle {
 }
 
 @media (max-width: 768px) {
+  body {
+    overflow-x: hidden;
+    font-size: 14px; /* Reducir tamaño de fuente base */
+  }
   .main-container { padding: 1.5rem 1rem; }
   .dashboard-header { flex-direction: column; align-items: flex-start; }
+  .dashboard-header h1 { font-size: 1.5rem; }
   
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .data-table {
+    min-width: 700px; /* Ajustar el ancho mínimo */
+  }
+
+  .data-table th, .data-table td {
+    padding: 0.75rem 0.5rem; /* Reducir padding en celdas */
+    font-size: 0.8rem;
+  }
+
+  .btn {
+    padding: 0.5rem 0.75rem; /* Reducir padding en botones */
+    font-size: 0.75rem;
+  }
+
   .nav-menu {
     display: none; flex-direction: column;
     width: 100%; background-color: var(--bg-white);
@@ -501,6 +525,15 @@ li.open > .folder-item .folder-toggle {
     position: relative;
     display: flex;
     flex-direction: column;
+  }
+
+  .details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .details-sidebar {
+    position: static;
+    width: 100%;
   }
   .sidebar-wrapper { 
     position: static; 
