@@ -4,6 +4,7 @@ import { supabase } from './supabaseClient.js';
 import { toTitleCase, showModal, hideModal } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
+const reanalizeBtn = document.getElementById('reanalize-btn');
 const panelTitle = document.getElementById('panel-title');
 const processingStatus = document.getElementById('processing-status');
 const postulantesCountDisplay = document.getElementById('postulantes-count-display');
@@ -28,6 +29,44 @@ let postulacionesCache = [];
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
+    // --- LÓGICA PARA EL BOTÓN DE REANÁLISIS ---
+    if (reanalizeBtn) {
+        reanalizeBtn.addEventListener('click', async () => {
+            if (!avisoActivo) return;
+
+            // Primera confirmación
+            if (!confirm("¿Estás seguro de que quieres re-analizar TODOS los candidatos de este aviso? Se borrarán las calificaciones y análisis actuales.")) {
+                return;
+            }
+
+            // Segunda confirmación
+            const confirmationText = prompt("Esta acción es irreversible. Escribe 'ANALIZAR' para confirmar.");
+            if (confirmationText !== 'ANALIZAR') {
+                alert("Confirmación incorrecta. La operación ha sido cancelada.");
+                return;
+            }
+
+            reanalizeBtn.disabled = true;
+            reanalizeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Reiniciando...';
+            try {
+                // Poner en null las calificaciones y resúmenes de todas las postulaciones de este aviso
+                const { error } = await supabase
+                    .from('v2_postulaciones')
+                    .update({ calificacion: null, resumen: null })
+                    .eq('aviso_id', avisoActivo.id);
+                if (error) throw error;
+                // Volver a cargar y procesar todo desde cero
+                await cargarPostulantes(avisoActivo.id);
+                await analizarPostulantesPendientes();
+            } catch (error) {
+                console.error("Error durante el reanálisis:", error);
+                alert("Ocurrió un error al intentar reiniciar los análisis.");
+            } finally {
+                reanalizeBtn.disabled = false;
+                reanalizeBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> Reanálisis';
+            }
+        });
+    }
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
 
     await cargarAvisos();
