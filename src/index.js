@@ -16,6 +16,26 @@ const dropZone = document.getElementById('drop-zone');
 let avisoActivo = null;
 let selectedFile = null;
 
+// --- FUNCIÓN PARA MOSTRAR QUE LA BÚSQUEDA ESTÁ CERRADA ---
+function mostrarBusquedaCerrada(motivo) {
+    avisoContainer.textContent = `Esta búsqueda laboral se encuentra cerrada`;
+    const mensajeContainer = document.querySelector('.public-page-wrapper .panel-container');
+    if (mensajeContainer) {
+        // Ocultamos el formulario y mostramos el mensaje de error.
+        formView.classList.add('hidden');
+        const errorView = document.createElement('div');
+        errorView.style.textAlign = 'center';
+        errorView.style.padding = '2rem';
+        errorView.innerHTML = `
+            <i class="fa-solid fa-circle-xmark" style="font-size: 4rem; color: var(--danger-color); margin-bottom: 1rem;"></i>
+            <h2 style="color: var(--text-dark); font-size: 1.75rem;">No se admiten más postulaciones</h2>
+            <p style="font-size: 1.125rem; color: var(--text-main);">${motivo}</p>
+        `;
+        mensajeContainer.appendChild(errorView);
+    }
+}
+
+
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -27,16 +47,33 @@ window.addEventListener('DOMContentLoaded', async () => {
         return;
     }
     
+    // Se añaden los campos para la validación
     const { data: aviso, error } = await supabase
         .from('v2_avisos')
-        .select('id, titulo')
+        .select('id, titulo, valido_hasta, max_cv, postulaciones_count')
         .eq('id', avisoId)
         .single();
 
     if (error || !aviso) {
         console.error("Error al buscar el aviso:", error);
-        avisoContainer.textContent = 'Esta búsqueda laboral no fue encontrada.';
-        cvForm.classList.add('hidden');
+        mostrarBusquedaCerrada("El aviso que buscas ya no existe.");
+        return;
+    }
+
+    // --- LÓGICA DE VALIDACIÓN DE LÍMITES ---
+    const hoy = new Date();
+    hoy.setUTCHours(0, 0, 0, 0); // Normalizar a medianoche UTC para comparar solo fechas
+    const fechaLimite = new Date(aviso.valido_hasta);
+    fechaLimite.setUTCHours(0,0,0,0);
+
+
+    if (hoy > fechaLimite) {
+        mostrarBusquedaCerrada(`La fecha límite para aplicar (${fechaLimite.toLocaleDateString()}) ya ha pasado.`);
+        return;
+    }
+
+    if (aviso.max_cv > 0 && aviso.postulaciones_count >= aviso.max_cv) {
+        mostrarBusquedaCerrada(`Hemos alcanzado el número máximo de candidatos para esta búsqueda.`);
         return;
     }
     
