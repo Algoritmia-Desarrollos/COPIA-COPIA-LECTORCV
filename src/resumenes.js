@@ -319,30 +319,31 @@ ${condicionesDeseablesTexto}
 
 Para determinar el estado de cada requisito (Cumple, Parcial, No Cumple), utiliza la siguiente jerarquía de evidencia:
 
+### Lógica de Evaluación de Requisitos
+
+Para determinar el estado de cada requisito ("Cumple", "Parcial", "No Cumple"), sigue esta jerarquía estricta:
+
 A) Estado: Cumple
-Se usa cuando el CV presenta evidencia fuerte y directa de que el requisito se satisface por completo.
-Ejemplo: Aviso pide "Licenciatura en Administración". CV dice "Título de Grado: Lic. en Administración de Empresas". -> Cumple.
-Ejemplo (por inferencia): Aviso pide "Sexo Femenino". Nombre es "Valentina Pérez". -> Cumple.
+Se usa EXCLUSIVAMENTE cuando hay evidencia clara, ya sea directa o por una inferencia lógica fuerte.
+* Evidencia Directa:** El CV contiene texto que satisface el requisito.
+    Ejemplo:* Aviso pide "Licenciatura en Administración". CV dice "Título: Lic. en Administración". -> **Cumple**.
+* Inferencia Lógica Fuerte (Más importante que la omisión):** Debes inferir activamente información obvia. ESTA REGLA ANULA LA OMISIÓN DE TEXTO.
+    Ejemplo Clave:* Aviso pide "Sexo Femenino". El nombre del candidato es "Priscila Solis" o "Maria López". -> **Cumple**. Justificación: "Se infiere el cumplimiento por el nombre del candidato." No lo marques como "No Cumple" solo porque el CV no dice "género: femenino".
+    Ejemplo de Título:* El candidato firma como "Lic. Juan Pérez". -> **Cumple** el requisito de tener una licenciatura.
 
 B) Estado: Parcial
-Se usa exclusivamente cuando el CV muestra una proximidad o cumplimiento incompleto del requisito. El candidato está cerca, pero no llega al 100%. Hay evidencia positiva, pero es parcial.
-Caso 1: Proximidad de Competencia. El candidato demuestra una habilidad muy similar o relacionada.
-Ejemplo: Aviso pide "Experiencia en SAP". CV dice "Manejo avanzado de Oracle ERP y otros sistemas de gestión". -> Parcial. (Justificación: "Domina un ERP líder como Oracle, lo que sugiere alta capacidad para aprender SAP").
-Caso 2: Proximidad Geográfica. El candidato reside en una localidad muy cercana a la requerida.
-Ejemplo: Aviso pide "Residir en Timbúes". CV dice "Vivo en San Lorenzo". -> Parcial. (Justificación: "Reside en San Lorenzo, localidad vecina y de fácil acceso a Timbúes").
-
-Caso 3: Cumplimiento Cuantitativo Incompleto. El candidato cumple con una parte significativa del requisito numérico.
-Ejemplo: Aviso pide "5 años de experiencia". CV demuestra 3.5 años. -> Parcial. (Justificación: "Cuenta con 3.5 años de experiencia, muy cercano a los 5 solicitados").
-Ejemplo: Aviso pide "Inglés Avanzado (C1)". CV dice "Nivel de Inglés: Intermedio-Avanzado (B2)". -> Parcial. (Justificación: "Posee un nivel B2, cercano al C1 requerido").
+Se usa cuando el CV muestra una proximidad o cumplimiento incompleto. El candidato está cerca, pero no al 100%.
+* Proximidad de Competencia:** Demuestra una habilidad muy similar.
+    Ejemplo:* Aviso pide "Experiencia en SAP". CV dice "Manejo de Oracle ERP". -> **Parcial**.
+* Cumplimiento Cuantitativo Incompleto:** Cumple una parte significativa del requisito numérico.
+    Ejemplo:* Aviso pide "5 años de experiencia". CV demuestra 3.5 años. -> **Parcial**.
 
 C) Estado: No Cumple
-Se usa en dos escenarios: omisión total de información o contradicción directa. Este estado significa que, basándose estrictamente en el CV, no hay evidencia de que el requisito se cumpla.
-Caso 1: Omisión Total de Evidencia. El CV no menciona en absoluto el requisito, ni nada directamente relacionado. La ausencia de evidencia se considera un no cumplimiento.
-Ejemplo: Aviso pide "Conocimientos en SAP". El CV detalla experiencia administrativa pero no menciona SAP ni ningún otro sistema ERP. -> No Cumple. (Justificación: "No se menciona experiencia con SAP ni ningún otro sistema ERP en el CV").
-Ejemplo: Aviso pide "Carnet de conducir". El CV no lo menciona en ninguna parte. -> No Cumple. (Justificación: "El CV no menciona poseer carnet de conducir").
-Caso 2: Contradicción Directa. El CV presenta información que choca frontalmente con el requisito.
-Ejemplo: Aviso pide "Residir en Rosario". CV dice "Residencia actual: Córdoba Capital". -> No Cumple. (Justificación: "El candidato reside en Córdoba, lo que contradice el requisito de residencia en Rosario").
-
+Se usa **SOLO SI** no se puede aplicar "Cumple" (ni por evidencia ni por inferencia) o "Parcial".
+* Omisión Total SIN Inferencia Posible:** El CV no menciona el requisito y no hay ninguna pista para inferirlo.
+    *Ejemplo:* Aviso pide "Carnet de conducir". El CV no lo menciona en ninguna parte. -> **No Cumple**.
+* Contradicción Directa:** El CV presenta información que choca frontalmente con el requisito.
+    * *Ejemplo:* Aviso pide "Residir en Rosario". CV dice "Residencia actual: Córdoba Capital". -> **No Cumple**.
 
 ### ENTRADAS
 
