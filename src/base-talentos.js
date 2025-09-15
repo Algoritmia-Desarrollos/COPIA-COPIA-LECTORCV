@@ -390,6 +390,7 @@ async function loadCandidates() {
             ubicacion,
             nombre_archivo_general,
             estado,
+            read,
             v2_carpetas(nombre),
             v2_notas_historial(count)
         `, { count: 'exact' });
@@ -469,6 +470,11 @@ function renderTable(candidatos) {
         row.dataset.id = candidato.id;
         row.dataset.estado = candidato.estado; // Para aplicar estilos
 
+        // Añadimos la clase 'read' si el candidato ha sido leído
+        if (candidato.read) {
+            row.classList.add('read');
+        }
+
         const estadoClass = getEstadoClass(candidato.estado);
 
         row.innerHTML = `
@@ -496,7 +502,6 @@ function renderTable(candidatos) {
     });
 }
 
-
 function addTableRowListeners(row) {
     row.draggable = true;
     row.addEventListener('dragstart', handleDragStart);
@@ -521,8 +526,9 @@ function addTableRowListeners(row) {
 function toggleActionRow(row) {
     const existingActionRow = document.getElementById(`actions-${row.dataset.id}`);
     const candidateStatus = row.dataset.estado;
+    const isRead = row.classList.contains('read'); // Verificamos si la fila tiene la clase 'read'
     
-    // Close any open action rows
+    // Cierra cualquier otra fila de acciones abierta
     document.querySelectorAll('.actions-row').forEach(r => {
         if (r.id !== `actions-${row.dataset.id}`) {
             r.remove();
@@ -535,9 +541,17 @@ function toggleActionRow(row) {
         const actionRow = document.createElement('tr');
         actionRow.id = `actions-${row.dataset.id}`;
         actionRow.className = 'actions-row';
+
+        // Creamos el botón dinámicamente según el estado 'read'
+        const readButtonText = isRead ? 'Marcar como no leído' : 'Marcar como leído';
+        const readButtonIcon = isRead ? 'fa-eye-slash' : 'fa-eye';
+
         actionRow.innerHTML = `
             <td colspan="5">
                 <div class="actions-container">
+                    <button class="btn btn-secondary btn-sm" data-action="toggle-read">
+                        <i class="fa-solid ${readButtonIcon}"></i> ${readButtonText}
+                    </button>
                     <button class="btn btn-secondary btn-sm" data-action="view-text"><i class="fa-solid fa-file-lines"></i> Ver Texto CV</button>
                     <button class="btn btn-primary btn-sm" data-action="view-cv"><i class="fa-solid fa-download"></i> Ver CV Original</button>
                     <button class="btn btn-secondary btn-sm" data-action="edit"><i class="fa-solid fa-pencil"></i> Editar Contacto</button>
@@ -553,6 +567,37 @@ function toggleActionRow(row) {
         `;
         row.insertAdjacentElement('afterend', actionRow);
 
+        // Event listener para el nuevo botón de lectura
+        actionRow.querySelector('[data-action="toggle-read"]').addEventListener('click', (e) => {
+            e.stopPropagation();
+            updateCandidateReadStatus(row.dataset.id, !isRead);
+        });
+
+
+        async function updateCandidateReadStatus(id, newReadState) {
+    const { error } = await supabase
+        .from('v2_candidatos')
+        .update({ read: newReadState })
+        .eq('id', id);
+
+    if (error) {
+        alert('Error al actualizar el estado de lectura.');
+    } else {
+        // Actualiza la UI directamente para una respuesta más rápida
+        const row = talentosListBody.querySelector(`tr[data-id='${id}']`);
+        if (row) {
+            row.classList.toggle('read', newReadState);
+            // Cierra la fila de acciones para que se regenere con el texto correcto la próxima vez que se abra
+            const actionRow = document.getElementById(`actions-${id}`);
+            if (actionRow) {
+                actionRow.remove();
+            }
+        }
+    }
+}
+
+
+        // Event listeners para los demás botones de acción
         actionRow.querySelector('[data-action="view-cv"]')?.addEventListener('click', (e) => { e.stopPropagation(); openCvPdf(row.dataset.id, e.currentTarget); });
         actionRow.querySelector('[data-action="view-text"]')?.addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
         actionRow.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
@@ -562,11 +607,12 @@ function toggleActionRow(row) {
                 e.stopPropagation();
                 const status = e.currentTarget.dataset.status;
                 updateCandidateStatus(row.dataset.id, status);
-                toggleActionRow(row);
+                toggleActionRow(row); // Cierra y vuelve a abrir para reflejar cambios si es necesario
             });
         });
     }
 }
+
 
 function getEstadoClass(estado) {
     switch (estado) {
@@ -588,12 +634,16 @@ function getSelectedIds() {
 function updateBulkActionsVisibility() {
     const selectedCount = isSelectAllMatchingActive ? allMatchingIds.length : getSelectedIds().length;
     bulkActionsContainer.classList.toggle('hidden', selectedCount === 0);
-    selectionCount.textContent = `(${selectedCount} seleccionados)`;
+    
+    // Ajuste: Mostrar el texto sin paréntesis
+    if (selectionCount) {
+        selectionCount.textContent = `${selectedCount} seleccionados`;
+    }
 
     const selectAllContainer = document.getElementById('select-all-matching-container');
     const selectAllPageMessage = document.getElementById('select-all-page-message');
 
-    if (selectAllCheckbox.checked && totalCandidates > rowsPerPage) {
+    if (selectAllCheckbox.checked && totalCandidates > 0 /* Reemplaza 'rowsPerPage' si no existe */) {
         selectAllContainer.classList.remove('hidden');
         if (isSelectAllMatchingActive) {
             selectAllPageMessage.textContent = `Todos los ${allMatchingIds.length} candidatos que coinciden están seleccionados.`;

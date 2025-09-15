@@ -24,30 +24,36 @@
 
   <main class="main-container">
     <div class="db-layout">
-      <aside class="sidebar-wrapper">
-        <div class="panel-container">
-          <h3>Carpetas</h3>
-          <ul id="folder-list" class="folder-list"><li>Cargando...</li></ul>
-          <div class="folder-actions">
-              <button id="show-add-folder-form-btn" class="btn btn-primary" style="width: 100%;">Crear Carpeta</button>
-              <div id="add-folder-form" class="hidden" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-                  <div class="form-group"><label for="new-folder-name">Nombre</label><input type="text" id="new-folder-name"></div>
-                  <div class="form-group"><label for="parent-folder-select">Ubicación</label><select id="parent-folder-select"><option value="">Raíz</option></select></div>
-                  <div class="form-actions" style="display: flex; gap: 0.5rem;"><button id="cancel-add-folder-btn" class="btn btn-secondary">Cancelar</button><button id="add-folder-btn" class="btn btn-primary">Guardar</button></div>
-              </div>
+    <aside class="sidebar-wrapper">
+    <div class="panel-container">
+      <h3>Carpetas</h3>
+      <ul id="folder-list" class="folder-list"><li>Cargando...</li></ul>
+      
+      <div class="folder-actions">
+          <button id="show-add-folder-form-btn" class="btn btn-primary" style="width: 100%;">Crear Carpeta</button>
+          <div id="add-folder-form" class="hidden" style="margin-top: 1rem; padding: 1rem; border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <div class="form-group"><label for="new-folder-name">Nombre</label><input type="text" id="new-folder-name" class="form-control"></div>
+              <div class="form-group"><label for="parent-folder-select">Ubicación</label><select id="parent-folder-select" class="form-control"><option value="">Raíz</option></select></div>
+              <div class="form-actions" style="display: flex; gap: 0.5rem;"><button id="cancel-add-folder-btn" class="btn btn-secondary">Cancelar</button><button id="add-folder-btn" class="btn btn-primary">Guardar</button></div>
           </div>
+      </div>
+    </div>
+    
+    <div id="bulk-actions-container" class="panel-container hidden">
+        <span id="selection-count"></span>
+        <div class="bulk-actions-divider"></div>
+        <div class="form-group">
+            <label for="move-to-folder-select">Mover a:</label>
+            <select id="move-to-folder-select" class="form-control"></select>
+            <button id="bulk-move-btn" class="btn btn-secondary">Mover</button>
         </div>
-        <div id="bulk-actions-container" class="panel-container hidden">
-          <div class="form-group">
-            <label>Mover a... <span id="selection-count"></span></label>
-            <div style="display: flex; gap: 0.5rem;">
-              <select id="move-to-folder-select" class="form-control"></select>
-              <button id="bulk-move-btn" class="btn btn-secondary">Mover</button>
-            </div>
-          </div>
-          <button id="bulk-delete-btn" class="btn btn-danger" style="width: 100%;">Eliminar</button>
-        </div>
-      </aside>
+        <button id="bulk-delete-btn" class="btn btn-danger">
+            <i class="fa-solid fa-trash-can"></i>
+            <span>Eliminar</span>
+        </button>
+    </div>
+</aside>
+
 
       <div class="db-main-content">
         <div class="panel-container">
