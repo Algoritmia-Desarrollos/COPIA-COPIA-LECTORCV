@@ -43,6 +43,8 @@ const notesCandidateIdInput = document.getElementById('notes-candidate-id');
 const newNoteTextarea = document.getElementById('new-note-textarea');
 const notesHistoryContainer = document.getElementById('notes-history-container');
 
+// src/base-talentos.js
+
 // --- ESTADO GLOBAL ---
 let carpetasCache = [];
 let currentFolderId = 'all';
@@ -53,6 +55,10 @@ let isUnreadFilterActive = false;
 let currentAvisoId = 'all';
 let allMatchingIds = [];
 let isSelectAllMatchingActive = false;
+
+// 👇 AÑADE ESTAS DOS LÍNEAS 👇
+let currentPage = 1;
+let allDataLoaded = false;
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
     await Promise.all([
