@@ -115,19 +115,33 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 
 // --- LÓGICA DE CARPETAS ---
+// src/base-talentos.js
+
 async function loadFolders() {
     const { data, error } = await supabase.from('v2_carpetas').select('*, v2_candidatos(id)').order('nombre');
     if (error) { console.error("Error al cargar carpetas:", error); return; }
     
+    // --- CÓDIGO MODIFICADO ---
+    // 1. Obtenemos el conteo total real sin límite de filas.
+    const { count: totalCount, error: countError } = await supabase
+        .from('v2_candidatos')
+        .select('*', { count: 'exact', head: true }); // head:true hace que no devuelva filas, solo el conteo
+
+    if(countError) { console.error("Error al contar candidatos:", countError); return; }
+
+    // 2. Obtenemos los candidatos para los contadores de carpetas específicas (esto ya lo hacías bien).
     const { data: allCandidates, error: candidatesError } = await supabase.from('v2_candidatos').select('id, carpeta_id');
-    if(candidatesError) { console.error("Error al cargar candidatos:", candidatesError); return; }
+    if(candidatesError) { console.error("Error al cargar candidatos para contadores:", candidatesError); return; }
 
     const counts = allCandidates.reduce((acc, candidato) => {
         const folderId = candidato.carpeta_id === null ? 'none' : candidato.carpeta_id;
         acc[folderId] = (acc[folderId] || 0) + 1;
         return acc;
     }, {});
-    counts['all'] = allCandidates.length;
+    
+    // 3. Usamos el conteo total real que obtuvimos.
+    counts['all'] = totalCount;
+    // --- FIN DEL CÓDIGO MODIFICADO ---
 
     carpetasCache = data;
     renderFoldersUI(counts);
