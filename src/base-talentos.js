@@ -396,6 +396,8 @@ function handleFolderClick(id, name, element) {
 }
 
 // --- LÓGICA DE CANDIDATOS ---
+// src/base-talentos.js
+
 async function loadCandidates() {
     talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
 
@@ -443,7 +445,7 @@ async function loadCandidates() {
             // Si no hay candidatos para ese aviso, mostrar tabla vacía y salir.
             totalCandidates = 0;
             renderTable([]);
-            setupPagination();
+            // setupPagination(); // Descomentar si usas paginación
             return;
         }
     }
@@ -463,6 +465,10 @@ async function loadCandidates() {
     // Aplicar orden después de los filtros
     query = query.order(currentSort.column, { ascending: currentSort.ascending });
 
+    // --- 👇 AQUÍ ESTÁ EL CAMBIO PRINCIPAL 👇 ---
+    // Limitar los resultados a 500 filas para la tabla
+    query = query.limit(500);
+
     // Ejecutar la consulta una sola vez
     const { data, error, count } = await query;
 
@@ -472,7 +478,8 @@ async function loadCandidates() {
         return;
     }
 
-    totalCandidates = count;
+    // 'count' tendrá el total real, 'data' tendrá solo 500
+    totalCandidates = count; 
     renderTable(data);
 }
 
