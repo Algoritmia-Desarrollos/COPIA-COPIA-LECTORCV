@@ -43,8 +43,6 @@ const notesCandidateIdInput = document.getElementById('notes-candidate-id');
 const newNoteTextarea = document.getElementById('new-note-textarea');
 const notesHistoryContainer = document.getElementById('notes-history-container');
 
-// src/base-talentos.js
-
 // --- ESTADO GLOBAL ---
 let carpetasCache = [];
 let currentFolderId = 'all';
@@ -56,16 +54,20 @@ let currentAvisoId = 'all';
 let allMatchingIds = [];
 let isSelectAllMatchingActive = false;
 
-// 👇 AÑADE ESTAS DOS LÍNEAS 👇
 let currentPage = 1;
 let allDataLoaded = false;
+
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
     await Promise.all([
         loadFolders(),
         loadAvisos()
     ]);
-    handleFolderClick('all', 'Todos los Candidatos', folderList.querySelector("[data-folder-id='all']"));
+    const allCandidatesElement = folderList.querySelector("[data-folder-id='all']");
+    if (allCandidatesElement) {
+        handleFolderClick('all', 'Todos los Candidatos', allCandidatesElement);
+    }
+
 
     let searchTimeout;
     filtroInput.addEventListener('input', () => {
@@ -96,6 +98,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     avisoFilterSelect.addEventListener('change', () => {
         currentAvisoId = avisoFilterSelect.value;
+        currentPage = 1;
+        allDataLoaded = false;
+        talentosListBody.innerHTML = '';
         loadCandidates();
     });
     selectAllCheckbox.addEventListener('change', handleSelectAll);
@@ -110,43 +115,40 @@ window.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('select-all-matching-btn').addEventListener('click', selectAllMatching);
 
     // Cerrar modales
-    document.getElementById('notes-modal-close').addEventListener('click', () => hideModal('notes-modal-container'));
+    document.body.addEventListener('click', (e) => {
+        const modal = e.target.closest('.modal-overlay');
+        if (modal && (e.target.matches('.modal-close-btn') || e.target === modal)) {
+            hideModal(modal.id);
+        }
+    });
 });
 
 
 // --- LÓGICA DE CARPETAS ---
-// src/base-talentos.js
-
 async function loadFolders() {
-    const { data, error } = await supabase.from('v2_carpetas').select('*, v2_candidatos(id)').order('nombre');
-    if (error) { console.error("Error al cargar carpetas:", error); return; }
-    
-    // --- CÓDIGO MODIFICADO ---
-    // 1. Obtenemos el conteo total real sin límite de filas.
-    const { count: totalCount, error: countError } = await supabase
-        .from('v2_candidatos')
-        .select('*', { count: 'exact', head: true }); // head:true hace que no devuelva filas, solo el conteo
+    const { data: foldersData, error: foldersError } = await supabase.from('v2_carpetas').select('*').order('nombre');
+    if (foldersError) { console.error("Error al cargar carpetas:", foldersError); return; }
 
-    if(countError) { console.error("Error al contar candidatos:", countError); return; }
+    const { data: countsData, error: countsError } = await supabase.rpc('get_folder_counts');
+    if (countsError) { 
+        console.error("Error al obtener conteos:", countsError); 
+        // Si la función RPC falla, volvemos al método lento como respaldo
+        await loadFoldersLegacy();
+        return;
+    }
 
-    // 2. Obtenemos los candidatos para los contadores de carpetas específicas (esto ya lo hacías bien).
-    const { data: allCandidates, error: candidatesError } = await supabase.from('v2_candidatos').select('id, carpeta_id');
-    if(candidatesError) { console.error("Error al cargar candidatos para contadores:", candidatesError); return; }
-
-    const counts = allCandidates.reduce((acc, candidato) => {
-        const folderId = candidato.carpeta_id === null ? 'none' : candidato.carpeta_id;
-        acc[folderId] = (acc[folderId] || 0) + 1;
+    const counts = countsData.reduce((acc, item) => {
+        acc[item.folder_id === null ? 'none' : item.folder_id] = item.candidate_count;
         return acc;
     }, {});
     
-    // 3. Usamos el conteo total real que obtuvimos.
-    counts['all'] = totalCount;
-    // --- FIN DEL CÓDIGO MODIFICADO ---
-
-    carpetasCache = data;
+    counts['all'] = countsData.reduce((sum, item) => sum + parseInt(item.candidate_count, 10), 0);
+    
+    carpetasCache = foldersData;
     renderFoldersUI(counts);
     populateFolderSelects();
 }
+
 
 function renderFoldersUI(counts = {}) {
     folderList.innerHTML = ''; // Limpiar la lista existente
@@ -164,7 +166,6 @@ function renderFoldersUI(counts = {}) {
         
         folderItem.addEventListener('click', (e) => handleFolderClick(id, name, e.currentTarget));
         
-        // Hacer que "Sin Carpeta" sea un destino para soltar
         if (id === 'none') {
             folderItem.addEventListener('dragover', handleDragOver);
             folderItem.addEventListener('dragleave', handleDragLeave);
@@ -253,18 +254,16 @@ function addDragAndDropListeners() {
 let draggedItemId = null;
 
 function handleDragStart(e) {
-    e.stopPropagation(); // Evitar que el evento se propague a elementos padres
+    e.stopPropagation();
     const target = e.currentTarget;
     
-    if (target.closest('.folder-item')) {
+    if (target.matches('.folder-item')) {
         draggedItemId = target.dataset.folderId;
         e.dataTransfer.setData('text/plain', `folder:${draggedItemId}`);
-    } else if (target.closest('tr[data-id]')) {
-        const candidateId = target.closest('tr[data-id]').dataset.id;
+    } else if (target.matches('tr[data-id]')) {
+        const candidateId = target.dataset.id;
         const selectedIds = getSelectedIds();
         
-        // Si el elemento arrastrado no está seleccionado, arrastrar solo ese.
-        // Si está seleccionado, arrastrar todos los seleccionados.
         const idsToDrag = selectedIds.includes(candidateId) ? selectedIds : [candidateId];
         
         draggedItemId = idsToDrag;
@@ -274,6 +273,7 @@ function handleDragStart(e) {
     e.dataTransfer.effectAllowed = 'move';
     target.classList.add('dragging');
 }
+
 
 function handleDragOver(e) {
     e.preventDefault();
@@ -301,38 +301,34 @@ async function handleDrop(e) {
     const [type, ids] = data.split(':');
     
     if (type === 'folder') {
-        // Lógica para mover carpeta a carpeta
         const draggedFolderId = ids;
         if (draggedFolderId && targetFolderId !== draggedFolderId) {
-            const { error } = await supabase.from('v2_carpetas').update({ parent_id: targetFolderId }).eq('id', draggedFolderId);
+            const newParentId = targetFolderId === 'all' || targetFolderId === 'none' ? null : parseInt(targetFolderId, 10);
+            const { error } = await supabase.from('v2_carpetas').update({ parent_id: newParentId }).eq('id', draggedFolderId);
             if (error) {
                 alert('Error al mover la carpeta.');
             } else {
-                const draggedFolder = carpetasCache.find(c => c.id == draggedFolderId);
-                if (draggedFolder) draggedFolder.parent_id = parseInt(targetFolderId, 10);
-                renderFoldersUI();
-                populateFolderSelects();
+                await loadFolders();
             }
         }
     } else if (type === 'candidate') {
-        // Lógica para mover candidato(s) a carpeta
         const candidateIds = ids.split(',');
-        const newFolderId = targetFolderId === 'none' ? null : parseInt(targetFolderId, 10);
+        const newFolderId = targetFolderId === 'none' || targetFolderId === 'all' ? null : parseInt(targetFolderId, 10);
         
         if (candidateIds.length > 0) {
             const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: newFolderId }).in('id', candidateIds);
             if (error) {
                 alert(`Error al mover ${candidateIds.length > 1 ? 'los candidatos' : 'el candidato'}.`);
             } else {
-                alert(`${candidateIds.length > 1 ? 'Candidatos movidos' : 'Candidato movido'} con éxito.`);
-                loadCandidates(); // Recargar para reflejar el cambio
-                loadFolders();
+                await Promise.all([loadCandidates(), loadFolders()]);
+                updateBulkActionsVisibility();
             }
         }
     }
 
     draggedItemId = null;
 }
+
 
 function handleDragEnd(e) {
     e.currentTarget.classList.remove('dragging');
@@ -356,7 +352,6 @@ async function editFolder(id, currentName) {
 
 async function deleteFolder(id) {
     if (confirm("¿Estás seguro de que quieres eliminar esta carpeta? Los candidatos dentro no serán eliminados, pero quedarán sin carpeta.")) {
-        // Primero, desasociar todos los candidatos de esta carpeta
         const { error: updateError } = await supabase
             .from('v2_candidatos')
             .update({ carpeta_id: null })
@@ -367,7 +362,6 @@ async function deleteFolder(id) {
             return;
         }
 
-        // Luego, eliminar la carpeta
         const { error: deleteError } = await supabase
             .from('v2_carpetas')
             .delete()
@@ -377,7 +371,6 @@ async function deleteFolder(id) {
             alert("Error al eliminar la carpeta.");
         } else {
             await loadFolders();
-            // Si la carpeta eliminada era la actual, volver a "Todos"
             if (currentFolderId == id) {
                 handleFolderClick('all', 'Todos los Candidatos', folderList.querySelector("[data-folder-id='all']"));
             }
@@ -391,28 +384,25 @@ function handleFolderClick(id, name, element) {
     filtroInput.value = '';
     folderTitle.textContent = name;
     folderList.querySelectorAll('.folder-item.active').forEach(el => el.classList.remove('active'));
-    element.classList.add('active');
+    if (element) {
+        element.classList.add('active');
+    }
+    
+    currentPage = 1;
+    allDataLoaded = false;
+    talentosListBody.innerHTML = '';
     loadCandidates();
 }
 
-// --- LÓGICA DE CANDIDATOS ---
-// src/base-talentos.js
 
+// --- LÓGICA DE CANDIDATOS ---
 async function loadCandidates() {
     talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
 
-    // Construir la consulta base pidiendo el conteo total
     let query = supabase
         .from('v2_candidatos')
         .select(`
-            id,
-            nombre_candidato,
-            email,
-            telefono,
-            ubicacion,
-            nombre_archivo_general,
-            estado,
-            read,
+            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read,
             v2_carpetas(nombre),
             v2_notas_historial(count)
         `, { count: 'exact' });
@@ -424,30 +414,13 @@ async function loadCandidates() {
         query = query.eq('carpeta_id', currentFolderId);
     }
 
-    // Aplicar filtro de aviso si no es 'all'
     if (currentAvisoId !== 'all') {
-        const { data: postulaciones, error: postError } = await supabase
-            .from('v2_postulaciones')
-            .select('candidato_id')
-            .eq('aviso_id', currentAvisoId);
-
-        if (postError) {
-            console.error("Error al obtener postulaciones para el filtro:", postError);
-            talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Error al filtrar por aviso.</td></tr>`;
-            return;
-        }
-
-        const candidateIds = postulaciones.map(p => p.candidato_id).filter(id => id !== null);
-
-        if (candidateIds.length > 0) {
-            query = query.in('id', candidateIds);
-        } else {
-            // Si no hay candidatos para ese aviso, mostrar tabla vacía y salir.
-            totalCandidates = 0;
-            renderTable([]);
-            // setupPagination(); // Descomentar si usas paginación
-            return;
-        }
+        query = query.select(`
+            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read,
+            v2_carpetas(nombre),
+            v2_notas_historial(count),
+            v2_postulaciones!inner(aviso_id)
+        `).eq('v2_postulaciones.aviso_id', currentAvisoId);
     }
 
     // Aplicar filtro de búsqueda
@@ -459,17 +432,15 @@ async function loadCandidates() {
 
     // Aplicar filtro especial para "No leídos"
     if (isUnreadFilterActive) {
-        query = query.like('nombre_candidato', 'Candidato No Identificado%');
+        query = query.is('read', false);
     }
 
-    // Aplicar orden después de los filtros
+    // Aplicar orden
     query = query.order(currentSort.column, { ascending: currentSort.ascending });
 
-    // --- 👇 AQUÍ ESTÁ EL CAMBIO PRINCIPAL 👇 ---
-    // Limitar los resultados a 500 filas para la tabla
+    // Limitar los resultados a 500
     query = query.limit(500);
 
-    // Ejecutar la consulta una sola vez
     const { data, error, count } = await query;
 
     if (error) {
@@ -478,10 +449,11 @@ async function loadCandidates() {
         return;
     }
 
-    // 'count' tendrá el total real, 'data' tendrá solo 500
-    totalCandidates = count; 
+    totalCandidates = count;
     renderTable(data);
+    updateBulkActionsVisibility();
 }
+
 
 // --- RENDERIZADO Y UI ---
 function renderTable(candidatos) {
@@ -495,21 +467,21 @@ function renderTable(candidatos) {
     candidatos.forEach(candidato => {
         const row = document.createElement('tr');
         row.dataset.id = candidato.id;
-        row.dataset.estado = candidato.estado; // Para aplicar estilos
+        row.dataset.estado = candidato.estado || 'normal';
 
-        // Añadimos la clase 'read' si el candidato ha sido leído
         if (candidato.read) {
             row.classList.add('read');
         }
 
         const estadoClass = getEstadoClass(candidato.estado);
+        const tieneNotas = candidato.v2_notas_historial && candidato.v2_notas_historial.length > 0 && candidato.v2_notas_historial[0].count > 0;
 
         row.innerHTML = `
             <td><input type="checkbox" class="candidate-checkbox" data-id="${candidato.id}"></td>
             <td>
                 <div class="candidate-name-container">
                     <span class="candidate-name ${estadoClass}">${candidato.nombre_candidato || 'No extraído'}</span>
-                    ${candidato.v2_notas_historial && candidato.v2_notas_historial.length > 0 && candidato.v2_notas_historial[0].count > 0 ? '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>' : ''}
+                    ${tieneNotas ? '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>' : ''}
                 </div>
                 <div class="candidate-filename">${candidato.nombre_archivo_general || 'No Identificado'}</div>
             </td>
@@ -529,13 +501,14 @@ function renderTable(candidatos) {
     });
 }
 
+
 function addTableRowListeners(row) {
     row.draggable = true;
     row.addEventListener('dragstart', handleDragStart);
     row.addEventListener('dragend', handleDragEnd);
 
     row.addEventListener('click', (e) => {
-        if (e.target.closest('button') || e.target.closest('a')) return;
+        if (e.target.closest('button, a, input')) return;
         const checkbox = row.querySelector('.candidate-checkbox');
         if (checkbox) {
             checkbox.checked = !checkbox.checked;
@@ -553,9 +526,8 @@ function addTableRowListeners(row) {
 function toggleActionRow(row) {
     const existingActionRow = document.getElementById(`actions-${row.dataset.id}`);
     const candidateStatus = row.dataset.estado;
-    const isRead = row.classList.contains('read'); // Verificamos si la fila tiene la clase 'read'
+    const isRead = row.classList.contains('read');
     
-    // Cierra cualquier otra fila de acciones abierta
     document.querySelectorAll('.actions-row').forEach(r => {
         if (r.id !== `actions-${row.dataset.id}`) {
             r.remove();
@@ -569,7 +541,6 @@ function toggleActionRow(row) {
         actionRow.id = `actions-${row.dataset.id}`;
         actionRow.className = 'actions-row';
 
-        // Creamos el botón dinámicamente según el estado 'read'
         const readButtonText = isRead ? 'Marcar como no leído' : 'Marcar como leído';
         const readButtonIcon = isRead ? 'fa-eye-slash' : 'fa-eye';
 
@@ -585,46 +556,20 @@ function toggleActionRow(row) {
                     <button class="btn btn-secondary btn-sm" data-action="notes"><i class="fa-solid fa-note-sticky"></i> Ver/Editar Notas</button>
                     <div class="status-buttons">
                         <button class="btn btn-sm ${candidateStatus === 'bueno' ? 'active' : ''}" data-action="set-status" data-status="bueno">Buen candidato</button>
-                        <button class="btn btn-sm ${candidateStatus === 'normal' ? 'active' : ''}" data-action="set-status" data-status="normal">Normal</button>
+                        <button class="btn btn-sm ${candidateStatus === 'normal' || !candidateStatus ? 'active' : ''}" data-action="set-status" data-status="normal">Normal</button>
                         <button class="btn btn-sm ${candidateStatus === 'prohibido' ? 'active' : ''}" data-action="set-status" data-status="prohibido">Prohibido</button>
-                        <button class="btn btn-sm ${!candidateStatus ? 'active' : ''}" data-action="set-status" data-status="">Limpiar</button>
+                        <button class="btn btn-sm" data-action="set-status" data-status="">Limpiar</button>
                     </div>
                 </div>
             </td>
         `;
         row.insertAdjacentElement('afterend', actionRow);
 
-        // Event listener para el nuevo botón de lectura
         actionRow.querySelector('[data-action="toggle-read"]').addEventListener('click', (e) => {
             e.stopPropagation();
             updateCandidateReadStatus(row.dataset.id, !isRead);
         });
 
-
-        async function updateCandidateReadStatus(id, newReadState) {
-    const { error } = await supabase
-        .from('v2_candidatos')
-        .update({ read: newReadState })
-        .eq('id', id);
-
-    if (error) {
-        alert('Error al actualizar el estado de lectura.');
-    } else {
-        // Actualiza la UI directamente para una respuesta más rápida
-        const row = talentosListBody.querySelector(`tr[data-id='${id}']`);
-        if (row) {
-            row.classList.toggle('read', newReadState);
-            // Cierra la fila de acciones para que se regenere con el texto correcto la próxima vez que se abra
-            const actionRow = document.getElementById(`actions-${id}`);
-            if (actionRow) {
-                actionRow.remove();
-            }
-        }
-    }
-}
-
-
-        // Event listeners para los demás botones de acción
         actionRow.querySelector('[data-action="view-cv"]')?.addEventListener('click', (e) => { e.stopPropagation(); openCvPdf(row.dataset.id, e.currentTarget); });
         actionRow.querySelector('[data-action="view-text"]')?.addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
         actionRow.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
@@ -634,19 +579,34 @@ function toggleActionRow(row) {
                 e.stopPropagation();
                 const status = e.currentTarget.dataset.status;
                 updateCandidateStatus(row.dataset.id, status);
-                toggleActionRow(row); // Cierra y vuelve a abrir para reflejar cambios si es necesario
             });
         });
     }
 }
 
+async function updateCandidateReadStatus(id, newReadState) {
+    const { error } = await supabase
+        .from('v2_candidatos')
+        .update({ read: newReadState })
+        .eq('id', id);
+
+    if (error) {
+        alert('Error al actualizar el estado de lectura.');
+    } else {
+        const row = talentosListBody.querySelector(`tr[data-id='${id}']`);
+        if (row) {
+            row.classList.toggle('read', newReadState);
+            const actionRow = document.getElementById(`actions-${id}`);
+            if (actionRow) actionRow.remove();
+        }
+    }
+}
 
 function getEstadoClass(estado) {
     switch (estado) {
         case 'bueno': return 'status-bueno';
         case 'prohibido': return 'status-prohibido';
-        case 'normal': return 'status-normal';
-        default: return '';
+        default: return 'status-normal';
     }
 }
 
@@ -659,51 +619,49 @@ function getSelectedIds() {
 }
 
 function updateBulkActionsVisibility() {
-    const selectedCount = isSelectAllMatchingActive ? allMatchingIds.length : getSelectedIds().length;
+    const selectedCount = getSelectedIds().length;
     bulkActionsContainer.classList.toggle('hidden', selectedCount === 0);
     
-    // Ajuste: Mostrar el texto sin paréntesis
     if (selectionCount) {
         selectionCount.textContent = `${selectedCount} seleccionados`;
     }
 
     const selectAllContainer = document.getElementById('select-all-matching-container');
     const selectAllPageMessage = document.getElementById('select-all-page-message');
+    const selectAllMatchingBtn = document.getElementById('select-all-matching-btn');
 
-    if (selectAllCheckbox.checked && totalCandidates > 0 /* Reemplaza 'rowsPerPage' si no existe */) {
+    const isPageFullySelected = talentosListBody.querySelectorAll('.candidate-checkbox:checked').length === talentosListBody.querySelectorAll('.candidate-checkbox').length && talentosListBody.querySelectorAll('.candidate-checkbox').length > 0;
+
+    if (selectAllCheckbox.checked && totalCandidates > talentosListBody.children.length) {
         selectAllContainer.classList.remove('hidden');
         if (isSelectAllMatchingActive) {
             selectAllPageMessage.textContent = `Todos los ${allMatchingIds.length} candidatos que coinciden están seleccionados.`;
-            document.getElementById('select-all-matching-btn').classList.add('hidden');
+            selectAllMatchingBtn.classList.add('hidden');
         } else {
-            selectAllPageMessage.textContent = `Se han seleccionado los ${getSelectedIds().length} candidatos de esta página.`;
-            document.getElementById('select-all-matching-btn').classList.remove('hidden');
+            const displayedCount = talentosListBody.querySelectorAll('.candidate-checkbox').length;
+            selectAllPageMessage.textContent = `Se han seleccionado los ${displayedCount} candidatos de esta página.`;
+            selectAllMatchingBtn.classList.remove('hidden');
         }
     } else {
         selectAllContainer.classList.add('hidden');
+        isSelectAllMatchingActive = false;
     }
 }
 
-function handleSelectAll() {
-    isSelectAllMatchingActive = false; // Resetear al cambiar la selección de página
-    talentosListBody.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = selectAllCheckbox.checked);
+function handleSelectAll(e) {
+    isSelectAllMatchingActive = false;
+    talentosListBody.querySelectorAll('.candidate-checkbox').forEach(cb => cb.checked = e.target.checked);
     updateBulkActionsVisibility();
 }
 
 async function selectAllMatching() {
-    // Construir la misma consulta que `loadCandidates` pero solo para obtener IDs
-    let query = supabase.from('v2_candidatos').select('id', { count: 'exact' });
+    let query = supabase.from('v2_candidatos').select('id');
 
-    // Re-aplicar todos los filtros activos
     if (currentFolderId === 'none') query = query.is('carpeta_id', null);
     else if (currentFolderId !== 'all') query = query.eq('carpeta_id', currentFolderId);
 
     if (currentAvisoId !== 'all') {
-        const { data: postulaciones, error: postError } = await supabase.from('v2_postulaciones').select('candidato_id').eq('aviso_id', currentAvisoId);
-        if (postError) { console.error("Error en filtro de aviso:", postError); return; }
-        const candidateIds = postulaciones.map(p => p.candidato_id).filter(id => id !== null);
-        if (candidateIds.length > 0) query = query.in('id', candidateIds);
-        else query = query.eq('id', -1);
+        query = query.select('id, v2_postulaciones!inner(aviso_id)').eq('v2_postulaciones.aviso_id', currentAvisoId);
     }
 
     if (currentSearchTerm) {
@@ -712,7 +670,7 @@ async function selectAllMatching() {
     }
 
     if (isUnreadFilterActive) {
-        query = query.like('nombre_candidato', 'Candidato No Identificado%');
+        query = query.is('read', false);
     }
 
     const { data, error } = await query;
@@ -726,37 +684,65 @@ async function selectAllMatching() {
     isSelectAllMatchingActive = true;
     updateBulkActionsVisibility();
 }
+
 async function handleBulkMove() {
     const ids = getSelectedIds();
     const targetFolderId = moveToFolderSelect.value === 'none' ? null : parseInt(moveToFolderSelect.value, 10);
     if (ids.length === 0 || moveToFolderSelect.value === "") return;
+
     const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: targetFolderId }).in('id', ids);
-    if (error) { alert("Error al mover."); } else { alert("Movidos con éxito."); loadCandidates(); loadFolders();}
+    if (error) { 
+        alert("Error al mover."); 
+    } else { 
+        alert("Movidos con éxito."); 
+        isSelectAllMatchingActive = false;
+        selectAllCheckbox.checked = false;
+        await Promise.all([loadCandidates(), loadFolders()]);
+    }
 }
+
 async function handleBulkDelete() {
     const ids = getSelectedIds();
     if (ids.length === 0) return;
     if (confirm(`¿Eliminar ${ids.length} candidato(s) de forma PERMANENTE?`)) {
         const { error } = await supabase.from('v2_candidatos').delete().in('id', ids);
-        if (error) { alert("Error al eliminar."); } else { alert("Eliminados con éxito."); loadCandidates(); }
+        if (error) { 
+            alert("Error al eliminar."); 
+        } else { 
+            alert("Eliminados con éxito."); 
+            isSelectAllMatchingActive = false;
+            selectAllCheckbox.checked = false;
+            await Promise.all([loadCandidates(), loadFolders()]);
+        }
     }
 }
+
 function toggleAddFolderForm(show) { addFolderForm.classList.toggle('hidden', !show); showAddFolderFormBtn.classList.toggle('hidden', show); }
+
 async function createNewFolder() {
     const name = newFolderNameInput.value.trim(); if (!name) return;
     const parentId = parentFolderSelect.value ? parseInt(parentFolderSelect.value, 10) : null;
     const { error } = await supabase.from('v2_carpetas').insert({ nombre: name, parent_id: parentId });
     if (error) { alert("Error al crear la carpeta."); } else { toggleAddFolderForm(false); await loadFolders(); }
 }
+
 function populateFolderSelects() {
+    const currentParentValue = parentFolderSelect.value;
+    const currentMoveToValue = moveToFolderSelect.value;
+
     parentFolderSelect.innerHTML = '<option value="">Raíz</option>';
     moveToFolderSelect.innerHTML = '<option value="" disabled selected>Mover a...</option><option value="none">Quitar de carpeta</option>';
+    
     carpetasCache.forEach(f => {
         const opt = `<option value="${f.id}">${f.nombre}</option>`;
         parentFolderSelect.innerHTML += opt;
         moveToFolderSelect.innerHTML += opt;
     });
+
+    parentFolderSelect.value = currentParentValue;
+    moveToFolderSelect.value = currentMoveToValue;
 }
+
 async function openCvPdf(id, buttonElement) {
     const originalHTML = buttonElement.innerHTML;
     buttonElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
@@ -775,24 +761,21 @@ async function openCvPdf(id, buttonElement) {
         buttonElement.disabled = false;
     }
 }
+
 async function openTextModal(id) {
-    // 1. Mostrar el modal inmediatamente con contenido vacío
-    textModalTitle.textContent = '';
+    textModalTitle.textContent = 'Cargando...';
     textModalBody.textContent = '';
     showModal('text-modal-container');
 
-    // 2. Obtener los datos de forma asíncrona
     const { data, error } = await supabase
         .from('v2_candidatos')
         .select('nombre_candidato, texto_cv_general')
         .eq('id', id)
         .single();
 
-    // 3. Actualizar el contenido del modal cuando los datos estén listos
     if (error || !data) {
         textModalTitle.textContent = 'Error';
         textModalBody.textContent = 'No se pudo cargar el texto del CV.';
-        console.error('Error fetching text modal data:', error);
         return;
     }
     
@@ -801,21 +784,16 @@ async function openTextModal(id) {
 }
 
 async function openEditModal(id) {
-    // 1. Mostrar el modal inmediatamente con el formulario vacío
     editCandidateIdInput.value = id;
-    editNombreInput.value = '';
-    editEmailInput.value = '';
-    editTelefonoInput.value = '';
+    editForm.reset();
     showModal('edit-modal-container');
 
-    // 2. Obtener los datos de forma asíncrona
     const { data, error } = await supabase
         .from('v2_candidatos')
         .select('nombre_candidato, email, telefono')
         .eq('id', id)
         .single();
 
-    // 3. Rellenar el formulario cuando los datos estén listos
     if (error || !data) {
         alert('No se pudo cargar la información del candidato.');
         hideModal('edit-modal-container');
@@ -833,12 +811,9 @@ async function loadAvisos() {
         .select('id, titulo')
         .order('created_at', { ascending: false });
 
-    if (error) {
-        console.error("Error al cargar avisos:", error);
-        return;
-    }
+    if (error) { console.error("Error al cargar avisos:", error); return; }
 
-    avisoFilterSelect.innerHTML = '<option value="all">Todos los Avisos</option>';
+    avisoFilterSelect.innerHTML = '<option value="all">Filtrar por Aviso</option>';
     data.forEach(aviso => {
         const option = document.createElement('option');
         option.value = aviso.id;
@@ -880,23 +855,21 @@ async function openNotesModal(id) {
         notesHistoryContainer.innerHTML = '<p>No hay notas anteriores.</p>';
     } else {
         notesHistoryContainer.innerHTML = data.map(nota => `
-            <div class="note-history-item" style="border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-bottom: 0.5rem;">
-                <p style="white-space: pre-wrap; margin: 0;">${nota.nota}</p>
-                <small style="color: #888;">${new Date(nota.created_at).toLocaleString()}</small>
+            <div class="note-history-item">
+                <p>${nota.nota}</p>
+                <small>${new Date(nota.created_at).toLocaleString()}</small>
             </div>
         `).join('');
     }
 }
+
 
 async function handleNotesFormSubmit(e) {
     e.preventDefault();
     const id = notesCandidateIdInput.value;
     const newNote = newNoteTextarea.value.trim();
 
-    if (!newNote) {
-        alert('La nota no puede estar vacía.');
-        return;
-    }
+    if (!newNote) return;
 
     const { error } = await supabase
         .from('v2_notas_historial')
@@ -905,14 +878,10 @@ async function handleNotesFormSubmit(e) {
     if (error) {
         alert("Error al guardar la nota.");
     } else {
-        newNoteTextarea.value = '';
-        openNotesModal(id); // Recargar el historial
-        
-        // Asegurarse de que el ícono de nota esté visible en la tabla
+        await openNotesModal(id); // Recargar
         const row = talentosListBody.querySelector(`tr[data-id='${id}']`);
         if (row && !row.querySelector('.has-notes-icon')) {
-            const nameContainer = row.querySelector('.candidate-name-container');
-            nameContainer.insertAdjacentHTML('beforeend', '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>');
+            row.querySelector('.candidate-name-container').insertAdjacentHTML('beforeend', '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>');
         }
     }
 }
@@ -920,18 +889,20 @@ async function handleNotesFormSubmit(e) {
 async function updateCandidateStatus(id, estado) {
     const { error } = await supabase
         .from('v2_candidatos')
-        .update({ estado: estado })
+        .update({ estado: estado || null }) // Enviar null para limpiar
         .eq('id', id);
 
     if (error) {
         alert('Error al actualizar el estado.');
     } else {
-        // Actualizar la UI directamente para una respuesta más rápida
         const row = talentosListBody.querySelector(`tr[data-id='${id}']`);
         if (row) {
-            row.dataset.estado = estado;
+            row.dataset.estado = estado || 'normal';
             const nameSpan = row.querySelector('.candidate-name');
             nameSpan.className = `candidate-name ${getEstadoClass(estado)}`;
+            
+            const actionRow = document.getElementById(`actions-${id}`);
+            if(actionRow) actionRow.remove();
         }
     }
 }
