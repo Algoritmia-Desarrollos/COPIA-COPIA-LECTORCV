@@ -1084,3 +1084,41 @@ li.open > .folder-item .folder-toggle {
         display: none; /* Oculta "Eliminar" y deja solo el ícono */
     }
 }
+
+
+/* --- 11. ESTILOS PARA FILTROS EN LÍNEA --- */
+
+.filters-container {
+  display: flex;
+  flex-wrap: nowrap; /* Evita que los filtros salten a la siguiente línea */
+  gap: 0.75rem;    /* Reduce el espacio entre filtros */
+  align-items: center;
+  margin-top: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* El input de búsqueda debe ser flexible y ocupar el espacio sobrante */
+.filters-container .form-group:first-child {
+  flex-grow: 1;
+  min-width: 180px; /* Un ancho mínimo más pequeño para que no ocupe tanto */
+}
+
+/* El resto de los filtros (desplegables) deben tener un tamaño basado en su contenido */
+.filters-container .form-group {
+  flex-grow: 0;
+  flex-shrink: 0; /* No permitir que se encojan */
+  margin-bottom: 0;
+}
+
+/* Hacemos los controles un poco más compactos para que entren mejor */
+.filters-container .form-control {
+  padding: 0.6rem 0.75rem;
+  font-size: 0.875rem; /* 14px */
+}
+
+/* Para pantallas más pequeñas, permitimos que los filtros vuelvan a saltar de línea */
+@media (max-width: 1280px) {
+  .filters-container {
+    flex-wrap: wrap;
+  }
+}

@@ -67,21 +67,36 @@
                 <a href="carga-masiva.html" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar a Base de datos</a>
             </div>
 
-            <div class="filters-container" style="display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; margin-bottom: 1.5rem;">
-                <div class="form-group" style="flex-grow: 1; margin-bottom: 0; min-width: 250px;">
+            <div class="filters-container">
+                <div class="form-group">
                     <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar por nombre, email o teléfono...">
                 </div>
-                <div class="form-group" style="flex-shrink: 0; margin-bottom: 0;">
+                <div class="form-group">
                     <select id="aviso-filter-select" class="form-control">
-                        <option value="all">Filtrar por aviso</option>
+                        <option value="all">Filtrar por Aviso</option>
                     </select>
                 </div>
-                <div class="form-group" style="flex-shrink: 0; margin-bottom: 0;">
+                <div class="form-group">
+                    <select id="status-filter-select" class="form-control">
+                        <option value="all">Filtrar por Estado</option>
+                        <option value="bueno">Buen candidato</option>
+                        <option value="normal">Normal</option>
+                        <option value="prohibido">Prohibido</option>
+                        <option value="sin_estado">Sin Estado</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <select id="read-filter-select" class="form-control">
+                        <option value="all">Leídos y no leídos</option>
+                        <option value="leido">Solo Leídos</option>
+                        <option value="no_leido">Solo No Leídos</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <select id="sort-select" class="form-control">
-                        <option value="created_at-desc">Últimos agregados</option>
-                        <option value="nombre_candidato-asc">Nombre (A-Z)</option>
-                        <option value="nombre_candidato-desc">Nombre (Z-A)</option>
-                        <option value="unread">No leídos</option>
+                        <option value="created_at-desc">Ordenar por: Recientes</option>
+                        <option value="nombre_candidato-asc">Ordenar por: Nombre (A-Z)</option>
+                        <option value="nombre_candidato-desc">Ordenar por: Nombre (Z-A)</option>
                     </select>
                 </div>
             </div>
@@ -158,8 +173,7 @@
       </div>
       <div class="modal-body">
           <div id="notes-history-container" style="margin-bottom: 1.5rem; max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; padding: 1rem; border-radius: 0.5rem;">
-              <!-- El historial de notas se cargará aquí -->
-          </div>
+              </div>
           <form id="notes-form">
               <input type="hidden" id="notes-candidate-id">
               <div class="form-group">

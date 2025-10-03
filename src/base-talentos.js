@@ -11,6 +11,8 @@ const filtroInput = document.getElementById('filtro-candidatos');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const sortSelect = document.getElementById('sort-select');
 const avisoFilterSelect = document.getElementById('aviso-filter-select');
+const statusFilterSelect = document.getElementById('status-filter-select');
+const readFilterSelect = document.getElementById('read-filter-select');
 
 
 // Acciones en Lote
@@ -49,13 +51,11 @@ let currentFolderId = 'all';
 let totalCandidates = 0;
 let currentSearchTerm = '';
 let currentSort = { column: 'created_at', ascending: false };
-let isUnreadFilterActive = false;
 let currentAvisoId = 'all';
+let currentStatusFilter = 'all';
+let currentReadFilter = 'all';
 let allMatchingIds = [];
 let isSelectAllMatchingActive = false;
-
-let currentPage = 1;
-let allDataLoaded = false;
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
@@ -68,41 +68,41 @@ window.addEventListener('DOMContentLoaded', async () => {
         handleFolderClick('all', 'Todos los Candidatos', allCandidatesElement);
     }
 
+    const reloadCandidatesOnChange = () => {
+        talentosListBody.innerHTML = '';
+        loadCandidates();
+    };
 
     let searchTimeout;
     filtroInput.addEventListener('input', () => {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => {
-            currentPage = 1;
             currentSearchTerm = filtroInput.value;
-            allDataLoaded = false;
-            talentosListBody.innerHTML = '';
-            loadCandidates();
+            reloadCandidatesOnChange();
         }, 500);
     });
 
     sortSelect.addEventListener('change', () => {
-        const value = sortSelect.value;
-        if (value === 'unread') {
-            isUnreadFilterActive = true;
-        } else {
-            isUnreadFilterActive = false;
-            const [column, order] = value.split('-');
-            currentSort = { column, ascending: order === 'asc' };
-        }
-        currentPage = 1;
-        allDataLoaded = false;
-        talentosListBody.innerHTML = '';
-        loadCandidates();
+        const [column, order] = sortSelect.value.split('-');
+        currentSort = { column, ascending: order === 'asc' };
+        reloadCandidatesOnChange();
     });
 
     avisoFilterSelect.addEventListener('change', () => {
         currentAvisoId = avisoFilterSelect.value;
-        currentPage = 1;
-        allDataLoaded = false;
-        talentosListBody.innerHTML = '';
-        loadCandidates();
+        reloadCandidatesOnChange();
     });
+
+    statusFilterSelect.addEventListener('change', () => {
+        currentStatusFilter = statusFilterSelect.value;
+        reloadCandidatesOnChange();
+    });
+
+    readFilterSelect.addEventListener('change', () => {
+        currentReadFilter = readFilterSelect.value;
+        reloadCandidatesOnChange();
+    });
+
     selectAllCheckbox.addEventListener('change', handleSelectAll);
     bulkMoveBtn.addEventListener('click', handleBulkMove);
     bulkDeleteBtn.addEventListener('click', handleBulkDelete);
@@ -114,7 +114,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     document.getElementById('select-all-matching-btn').addEventListener('click', selectAllMatching);
 
-    // Cerrar modales
     document.body.addEventListener('click', (e) => {
         const modal = e.target.closest('.modal-overlay');
         if (modal && (e.target.matches('.modal-close-btn') || e.target === modal)) {
@@ -132,8 +131,6 @@ async function loadFolders() {
     const { data: countsData, error: countsError } = await supabase.rpc('get_folder_counts');
     if (countsError) { 
         console.error("Error al obtener conteos:", countsError); 
-        // Si la función RPC falla, volvemos al método lento como respaldo
-        await loadFoldersLegacy();
         return;
     }
 
@@ -151,9 +148,8 @@ async function loadFolders() {
 
 
 function renderFoldersUI(counts = {}) {
-    folderList.innerHTML = ''; // Limpiar la lista existente
+    folderList.innerHTML = ''; 
 
-    // --- Renderizar carpetas estáticas ---
     ['Todos los Candidatos', 'Sin Carpeta'].forEach(name => {
         const id = name === 'Todos los Candidatos' ? 'all' : 'none';
         const icon = id === 'all' ? 'fa-inbox' : 'fa-folder-open';
@@ -176,7 +172,6 @@ function renderFoldersUI(counts = {}) {
         folderList.appendChild(li);
     });
 
-    // --- Renderizar carpetas dinámicas jerárquicamente ---
     const carpetasPorId = new Map(carpetasCache.map(c => [c.id, { ...c, children: [] }]));
     const carpetasRaiz = [];
 
@@ -380,16 +375,14 @@ async function deleteFolder(id) {
 
 function handleFolderClick(id, name, element) {
     currentFolderId = id;
-    currentSearchTerm = '';
     filtroInput.value = '';
+    currentSearchTerm = '';
     folderTitle.textContent = name;
     folderList.querySelectorAll('.folder-item.active').forEach(el => el.classList.remove('active'));
     if (element) {
         element.classList.add('active');
     }
     
-    currentPage = 1;
-    allDataLoaded = false;
     talentosListBody.innerHTML = '';
     loadCandidates();
 }
@@ -407,7 +400,7 @@ async function loadCandidates() {
             v2_notas_historial(count)
         `, { count: 'exact' });
 
-    // Aplicar filtro de carpeta
+    // Aplicar filtros
     if (currentFolderId === 'none') {
         query = query.is('carpeta_id', null);
     } else if (currentFolderId !== 'all') {
@@ -423,22 +416,27 @@ async function loadCandidates() {
         `).eq('v2_postulaciones.aviso_id', currentAvisoId);
     }
 
-    // Aplicar filtro de búsqueda
     if (currentSearchTerm) {
         const searchTerm = `%${currentSearchTerm}%`;
-        const orFilter = `nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`;
-        query = query.or(orFilter);
+        query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
     }
 
-    // Aplicar filtro especial para "No leídos"
-    if (isUnreadFilterActive) {
-        query = query.is('read', false);
+    if (currentStatusFilter !== 'all') {
+        if (currentStatusFilter === 'sin_estado') {
+            query = query.is('estado', null);
+        } else {
+            query = query.eq('estado', currentStatusFilter);
+        }
+    }
+
+    if (currentReadFilter !== 'all') {
+        const isRead = currentReadFilter === 'leido';
+        query = query.eq('read', isRead);
     }
 
     // Aplicar orden
     query = query.order(currentSort.column, { ascending: currentSort.ascending });
 
-    // Limitar los resultados a 500
     query = query.limit(500);
 
     const { data, error, count } = await query;
@@ -460,7 +458,7 @@ function renderTable(candidatos) {
     talentosListBody.innerHTML = '';
 
     if (!candidatos || candidatos.length === 0) {
-        talentosListBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No se encontraron candidatos.</td></tr>';
+        talentosListBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No se encontraron candidatos para los filtros seleccionados.</td></tr>';
         return;
     }
 
@@ -668,9 +666,18 @@ async function selectAllMatching() {
         const searchTerm = `%${currentSearchTerm}%`;
         query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
     }
+    
+    if (currentStatusFilter !== 'all') {
+        if (currentStatusFilter === 'sin_estado') {
+            query = query.is('estado', null);
+        } else {
+            query = query.eq('estado', currentStatusFilter);
+        }
+    }
 
-    if (isUnreadFilterActive) {
-        query = query.is('read', false);
+    if (currentReadFilter !== 'all') {
+        const isRead = currentReadFilter === 'leido';
+        query = query.eq('read', isRead);
     }
 
     const { data, error } = await query;
