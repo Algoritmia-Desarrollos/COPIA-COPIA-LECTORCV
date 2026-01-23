@@ -1,8 +1,7 @@
-# supabase/config.toml
-
 [functions]
-[functions.openai]
-  verify_jwt = true
 
-[functions.openaiv2]
-  verify_jwt = false  # <--- Asegúrate que diga openaiv2 y false
+[functions.openaiv2]  # <--- ESTO ES LO QUE TE FALTA
+  verify_jwt = false
+
+[functions.v2-process-cv]
+  verify_jwt = false
