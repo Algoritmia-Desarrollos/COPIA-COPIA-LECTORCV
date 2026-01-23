@@ -2,52 +2,57 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import OpenAI from 'npm:openai'
 
 Deno.serve(async (req) => {
-  // Configuración de CORS (Permisos de acceso)
+  // CONFIGURACIÓN DE CORS (Para que el navegador no bloquee)
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  }
+
+  // Si el navegador pregunta "¿puedo pasar?", le decimos que SÍ.
   if (req.method === 'OPTIONS') {
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-      },
-    })
+    return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { query } = await req.json()
+    const body = await req.json()
+    const query = body.query || "Analiza este CV y responde en JSON"
 
-    // Inicializamos la IA
+    // INICIALIZAMOS OPENAI
     const openai = new OpenAI({
       apiKey: Deno.env.get("OPENAI_API_KEY"),
     })
 
-    // Solicitamos respuesta a OpenAI
+    // LA LLAMADA BLINDADA
     const chatCompletion = await openai.chat.completions.create({
       messages: [
-        // ESTA LINEA EVITA EL ERROR 400: Le decimos explícitamente que use JSON
-        { role: "system", content: "You are a helpful assistant. You must always respond in valid JSON format." },
-        { role: "user", content: query || "Hola" }
+        { 
+          role: "system", 
+          content: "Eres un asistente útil. IMPORTANTE: Debes responder siempre en formato JSON válido." 
+        },
+        { 
+          role: "user", 
+          // Aquí concatenamos la instrucción JSON por si acaso el usuario se olvidó
+          content: query + " (Responde en formato JSON)" 
+        }
       ],
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
     })
 
-    const data = {
+    const result = {
       message: chatCompletion.choices[0].message.content,
     }
 
-    return new Response(
-      JSON.stringify(data),
-      { 
-        headers: { 
-          "Content-Type": "application/json",
-          'Access-Control-Allow-Origin': '*',
-        } 
-      },
-    )
+    // RESPUESTA EXITOSA
+    return new Response(JSON.stringify(result), { 
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    })
+
   } catch (error) {
+    // CAPTURA DE ERROR PARA QUE NO SALGA "FunctionsFetchError"
     return new Response(JSON.stringify({ error: error.message }), {
-      headers: { "Content-Type": "application/json", 'Access-Control-Allow-Origin': '*' },
-      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, // Devolvemos 500 pero con CORS, para ver el mensaje real
     })
   }
 })
