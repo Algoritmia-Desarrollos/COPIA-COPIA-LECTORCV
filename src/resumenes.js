@@ -406,8 +406,10 @@ Devuelve **solo** el objeto JSON. La justificación debe ser un borrador que el 
     // --- LLAMADA A LA IA ---
     const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
     if (error) {
-        throw new Error("No se pudo conectar con la IA.");
-    }
+if (error) {
+    console.error("🔥 ERROR REAL SUPABASE:", error); // Muestra el error en la consola (F12)
+    throw new Error(`Error IA: ${JSON.stringify(error)}`); // Muestra el error en la pantalla
+}    }
 
     try {
         const content = JSON.parse(data.message);

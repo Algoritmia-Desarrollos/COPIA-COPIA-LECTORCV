@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { OpenAI } from "https://deno.land/x/openai/mod.ts";
+import OpenAI from 'npm:openai'  // <--- USA ESTE
 import { toTitleCase } from "https://deno.land/x/to_title_case/mod.ts";
 
 const corsHeaders = {
