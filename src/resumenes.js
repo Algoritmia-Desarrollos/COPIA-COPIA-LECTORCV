@@ -626,7 +626,7 @@ function crearFila(postulacion) {
 
     const telefonoWA = telefono.replace(/\D/g, '');
     const msgWA = encodeURIComponent(`Hola ${nombre}, te contactamos en relación a tu postulación.`);
-    const waBtnHTML = telefonoWA ? `<a href="https://wa.me/${telefonoWA}?text=${msgWA}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Enviar WhatsApp" style="display:inline-flex;align-items:center;"><i class="fa-brands fa-whatsapp" style="color:#25d366; font-size:1rem;"></i></a>` : '';
+    const waBtnHTML = telefonoWA ? `<a href="https://wa.me/${telefonoWA}?text=${msgWA}" target="wa_window" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Enviar WhatsApp" style="display:inline-flex;align-items:center;"><i class="fa-brands fa-whatsapp" style="color:#25d366; font-size:1rem;"></i></a>` : '';
 
     const estadoPipeline = postulacion.estado_postulacion || 'sin_revisar';
     const pipelineClass = {
@@ -660,13 +660,11 @@ function crearFila(postulacion) {
                 <option value="contratado" ${estadoPipeline === 'contratado' ? 'selected' : ''}>Contratado</option>
             </select>` : '<span style="font-size:0.72rem; color:var(--text-light);">—</span>'}
         </td>
-        <td><button class="btn btn-secondary btn-sm" data-action="ver-resumen" ${!postulacion.resumen ? 'disabled' : ''}><i class="fa-solid fa-chart-bar"></i></button></td>
-        <td>
-            <div class="actions-group">
-                <button class="btn btn-secondary btn-sm" data-action="ver-notas" title="${tieneNota ? 'Ver notas' : 'Agregar nota'}"><i class="fa-solid fa-note-sticky${tieneNota ? '' : '-o'}"></i></button>
-                <button class="btn btn-secondary btn-sm" data-action="toggle-leido" title="${isLeido ? 'Marcar no leído' : 'Marcar leído'}">
-                    <i class="fa-solid ${isLeido ? 'fa-eye-slash' : 'fa-eye'}"></i>
-                </button>
+        <td style="text-align:right;">
+            <div class="actions-group" style="justify-content:flex-end;">
+                <button class="btn btn-secondary btn-sm" data-action="ver-resumen" title="Ver análisis" ${!postulacion.resumen ? 'disabled' : ''}><i class="fa-solid fa-chart-bar"></i></button>
+                <button class="btn btn-secondary btn-sm" data-action="ver-notas" title="${tieneNota ? 'Ver notas' : 'Agregar nota'}" style="${tieneNota ? 'color: var(--primary-color);' : 'opacity:0.45;'}"><i class="fa-solid fa-note-sticky"></i></button>
+                <button class="btn btn-secondary btn-sm" data-action="toggle-leido" title="${isLeido ? 'Marcar no leído' : 'Marcar leído'}"><i class="fa-solid ${isLeido ? 'fa-eye-slash' : 'fa-eye'}"></i></button>
                 <button class="btn btn-primary btn-sm" data-action="ver-cv" title="Descargar CV"><i class="fa-solid fa-download"></i></button>
             </div>
         </td>
@@ -913,7 +911,7 @@ function toggleInlineNotas(postulacion, row) {
     notasRow.id = `notas-row-${postulacion.id}`;
     notasRow.className = 'inline-notes-row';
     notasRow.innerHTML = `
-        <td colspan="8">
+        <td colspan="7">
             <div class="inline-notes-container">
                 <textarea class="inline-notes-textarea form-control" placeholder="Escribe una nota sobre este candidato...">${postulacion.notas || ''}</textarea>
                 <div class="inline-notes-actions">
@@ -1132,6 +1130,7 @@ async function procesarCandidatoYPostulacion(iaData, base64, textoCV, nombreArch
         base64_general: base64,
         texto_cv_general: textoCV,
         nombre_archivo_general: nombreArchivo,
+        read: false,
         updated_at: new Date()
     }, { onConflict: 'nombre_candidato' }).select('id').single();
     if (upsertError) throw new Error(`Error al procesar candidato: ${upsertError.message}`);

@@ -81,6 +81,8 @@
                 <div class="form-group">
                     <select id="status-filter-select" class="form-control">
                         <option value="all">Filtrar por Estado</option>
+                        <option value="contactado">Contactado</option>
+                        <option value="contratado">Contratado</option>
                         <option value="bueno">Buen candidato</option>
                         <option value="normal">Normal</option>
                         <option value="prohibido">Prohibido</option>
@@ -107,12 +109,12 @@
               <table id="talentos-table" class="data-table">
                 <thead>
                   <tr>
-                    <th><input type="checkbox" id="select-all-checkbox"></th>
-                    <th>Nombre Candidato</th>
-                    <th>Carpeta</th>
-                    <th>Contacto</th>
-                    <th>Fecha</th>
-                    <th style="text-align: center;">Acciones</th>
+                    <th style="width:3%;"><input type="checkbox" id="select-all-checkbox"></th>
+                    <th style="width:26%;">Nombre Candidato</th>
+                    <th style="width:12%;">Carpeta</th>
+                    <th style="width:22%;">Contacto</th>
+                    <th style="width:8%;">Fecha</th>
+                    <th style="width:29%; text-align:right;">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="talentos-list-body"></tbody>

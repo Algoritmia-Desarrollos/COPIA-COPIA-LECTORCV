@@ -417,7 +417,8 @@ async function loadCandidates(append = false) {
         .select(`
             id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
             v2_carpetas(nombre),
-            v2_notas_historial(count)
+            v2_notas_historial(count),
+            v2_postulaciones(v2_avisos(titulo))
         `, { count: 'exact' });
 
     // Aplicar filtros
@@ -432,7 +433,7 @@ async function loadCandidates(append = false) {
             id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
             v2_carpetas(nombre),
             v2_notas_historial(count),
-            v2_postulaciones!inner(aviso_id)
+            v2_postulaciones!inner(aviso_id, v2_avisos(titulo))
         `).eq('v2_postulaciones.aviso_id', currentAvisoId);
     }
 
@@ -506,6 +507,20 @@ function renderTable(candidatos, append = false) {
 
         const estadoClass = getEstadoClass(candidato.estado);
         const tieneNotas = candidato.v2_notas_historial && candidato.v2_notas_historial.length > 0 && candidato.v2_notas_historial[0].count > 0;
+        const estadoActual = candidato.estado || '';
+        const isContactado = estadoActual === 'contactado';
+        const isContratado = estadoActual === 'contratado';
+        const telWA = (candidato.telefono || '').replace(/\D/g, '');
+        const waBtnBT = telWA ? `<a href="https://wa.me/${telWA}" target="wa_window" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="WhatsApp" style="display:inline-flex;align-items:center;" onclick="event.stopPropagation()"><i class="fa-brands fa-whatsapp" style="color:#25d366;font-size:1rem;"></i></a>` : '';
+
+        // Avisos en que participó
+        const avisos = (candidato.v2_postulaciones || [])
+            .map(p => p.v2_avisos?.titulo)
+            .filter(Boolean)
+            .filter((v, i, a) => a.indexOf(v) === i); // unique
+        const avisosHTML = avisos.length
+            ? `<div class="candidate-avisos">${avisos.map(t => `<span class="aviso-pill" title="${t}">${t}</span>`).join('')}</div>`
+            : '';
 
         row.innerHTML = `
             <td><input type="checkbox" class="candidate-checkbox" data-id="${candidato.id}"></td>
@@ -515,18 +530,28 @@ function renderTable(candidatos, append = false) {
                     ${tieneNotas ? '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>' : ''}
                 </div>
                 <div class="candidate-filename">${candidato.nombre_archivo_general || 'No Identificado'}</div>
+                ${avisosHTML}
             </td>
             <td>${candidato.v2_carpetas?.nombre || '<em>Sin Carpeta</em>'}</td>
             <td>
-                <div style="white-space: normal;">${candidato.email || ''}</div>
-                <div class="text-light">${candidato.telefono || ''}</div>
+                <div style="white-space: normal; overflow: hidden; text-overflow: ellipsis;">${candidato.email || ''}</div>
+                <div style="display:flex; align-items:center; gap:0.3rem; flex-wrap:nowrap;">
+                    <span class="text-light" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${candidato.telefono || ''}</span>
+                    ${waBtnBT}
+                </div>
             </td>
             <td style="font-size: 0.8rem; color: var(--text-light); white-space: nowrap;" title="${candidato.created_at ? new Date(candidato.created_at).toLocaleDateString('es-AR') : ''}">
                 ${formatRelativeDate(candidato.created_at)}
             </td>
-            <td class="actions-cell" style="text-align: center;">
-                <button class="btn btn-secondary btn-sm" data-action="toggle-actions">
-                    <i class="fa-solid fa-ellipsis-vertical"></i>
+            <td class="actions-cell" style="text-align: right; white-space: nowrap;">
+                <button class="quick-status-btn ${isContactado ? 'qs-active-contactado' : ''}" data-quick-status="contactado" title="${isContactado ? 'Hablado ✓' : 'Marcar como contactado'}">
+                    <i class="fa-solid fa-phone-flip"></i> ${isContactado ? 'Hablado' : 'Hablar'}
+                </button>
+                <button class="quick-status-btn ${isContratado ? 'qs-active-contratado' : ''}" data-quick-status="contratado" title="${isContratado ? 'Contratado ✓' : 'Marcar como contratado'}">
+                    <i class="fa-solid fa-handshake"></i> ${isContratado ? 'Contratado' : 'Contratar'}
+                </button>
+                <button class="btn btn-secondary btn-sm" data-action="toggle-actions" title="Más acciones" style="margin-left:0.4rem;">
+                    <i class="fa-solid fa-chevron-down"></i>
                 </button>
             </td>
         `;
@@ -554,6 +579,24 @@ function addTableRowListeners(row) {
     row.querySelector('[data-action="toggle-actions"]')?.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleActionRow(row);
+    });
+    row.querySelectorAll('[data-quick-status]').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const newStatus = btn.dataset.quickStatus;
+            const currentStatus = row.dataset.estado;
+            const statusToSet = currentStatus === newStatus ? '' : newStatus;
+            row.dataset.estado = statusToSet;
+            const { error } = await supabase.from('v2_candidatos').update({ estado: statusToSet || null }).eq('id', row.dataset.id);
+            if (error) { alert('Error al actualizar.'); return; }
+            // Refresh buttons in place
+            const isC = statusToSet === 'contactado';
+            const isH = statusToSet === 'contratado';
+            const phoneBtn = row.querySelector('[data-quick-status="contactado"]');
+            const hireBtn = row.querySelector('[data-quick-status="contratado"]');
+            if (phoneBtn) { phoneBtn.className = `quick-status-btn ${isC ? 'qs-active-contactado' : ''}`; phoneBtn.title = isC ? 'Hablado ✓' : 'Marcar como contactado'; phoneBtn.innerHTML = `<i class="fa-solid fa-phone-flip"></i> ${isC ? 'Hablado' : 'Hablar'}`; phoneBtn.dataset.quickStatus = 'contactado'; }
+            if (hireBtn) { hireBtn.className = `quick-status-btn ${isH ? 'qs-active-contratado' : ''}`; hireBtn.title = isH ? 'Contratado ✓' : 'Marcar como contratado'; hireBtn.innerHTML = `<i class="fa-solid fa-handshake"></i> ${isH ? 'Contratado' : 'Contratar'}`; hireBtn.dataset.quickStatus = 'contratado'; }
+        });
     });
 }
 
@@ -642,7 +685,7 @@ function getEstadoClass(estado) {
     switch (estado) {
         case 'bueno': return 'status-bueno';
         case 'prohibido': return 'status-prohibido';
-        default: return 'status-normal';
+        default: return 'status-normal'; // contactado, contratado, normal, null → sin color especial
     }
 }
 
@@ -825,13 +868,27 @@ function populateFolderSelects() {
     const currentMoveToValue = moveToFolderSelect.value;
 
     parentFolderSelect.innerHTML = '<option value="">Raíz</option>';
-    moveToFolderSelect.innerHTML = '<option value="" disabled selected>Mover a...</option><option value="none">Quitar de carpeta</option>';
-    
+    moveToFolderSelect.innerHTML = '<option value="" disabled selected>Mover a...</option><option value="none">— Sin carpeta</option>';
+
+    // Build hierarchy tree
+    const byId = new Map(carpetasCache.map(f => [f.id, { ...f, children: [] }]));
+    const roots = [];
     carpetasCache.forEach(f => {
-        const opt = `<option value="${f.id}">${f.nombre}</option>`;
-        parentFolderSelect.innerHTML += opt;
-        moveToFolderSelect.innerHTML += opt;
+        if (f.parent_id && byId.has(f.parent_id)) byId.get(f.parent_id).children.push(byId.get(f.id));
+        else roots.push(byId.get(f.id));
     });
+
+    const addOptions = (folders, depth = 0) => {
+        const prefix = depth === 0 ? '' : ('　'.repeat(depth - 1) + '└ ');
+        folders.forEach(f => {
+            const label = prefix + f.nombre;
+            const opt = `<option value="${f.id}">${label}</option>`;
+            parentFolderSelect.innerHTML += opt;
+            moveToFolderSelect.innerHTML += opt;
+            if (f.children.length) addOptions(f.children, depth + 1);
+        });
+    };
+    addOptions(roots);
 
     parentFolderSelect.value = currentParentValue;
     moveToFolderSelect.value = currentMoveToValue;
