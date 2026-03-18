@@ -1,7 +1,7 @@
 // src/resumenes.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase, showModal, hideModal } from './utils.js';
+import { toTitleCase, showModal, hideModal, formatRelativeDate } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const reanalizeBtn = document.getElementById('reanalize-btn');
@@ -199,7 +199,7 @@ async function cargarPostulantes(avisoId) {
         .from('v2_postulaciones')
         .select(`
             id, calificacion, resumen, notas, nombre_archivo_especifico, created_at,
-            v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general)
+            v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general, read)
         `)
         .eq('aviso_id', avisoId);
 
@@ -586,6 +586,10 @@ function crearFila(postulacion) {
     const email = candidato?.email || postulacion.email_snapshot || 'N/A';
     const telefono = candidato?.telefono || postulacion.telefono_snapshot || 'N/A';
     const tieneNota = postulacion.notas && postulacion.notas.trim() !== '';
+    const isLeido = candidato?.read === true;
+    const fechaPostulacion = formatRelativeDate(postulacion.created_at);
+
+    if (!isLeido) row.classList.add('unread');
 
     row.innerHTML = `
         <td><input type="checkbox" class="postulacion-checkbox" data-id="${postulacion.id}"></td>
@@ -597,11 +601,15 @@ function crearFila(postulacion) {
             <div style="white-space: normal; overflow: visible;">${email}</div>
             <div class="text-light">${telefono}</div>
         </td>
+        <td style="font-size: 0.8rem; color: var(--text-light); white-space: nowrap;" title="${postulacion.created_at ? new Date(postulacion.created_at).toLocaleDateString('es-AR') : ''}">${fechaPostulacion}</td>
         <td>${calificacionHTML}</td>
         <td><button class="btn btn-secondary btn-sm" data-action="ver-resumen" ${!postulacion.resumen ? 'disabled' : ''}>Análisis</button></td>
         <td>
             <div class="actions-group">
                 <button class="btn btn-secondary btn-sm" data-action="ver-notas" title="Notas"><i class="fa-solid fa-note-sticky"></i></button>
+                <button class="btn btn-secondary btn-sm" data-action="toggle-leido" title="${isLeido ? 'Marcar no leído' : 'Marcar leído'}">
+                    <i class="fa-solid ${isLeido ? 'fa-eye-slash' : 'fa-eye'}"></i>
+                </button>
                 <button class="btn btn-primary btn-sm" data-action="ver-cv" title="Descargar CV General"><i class="fa-solid fa-download"></i></button>
             </div>
         </td>
@@ -614,8 +622,12 @@ function crearFila(postulacion) {
         updateBulkActionsVisibility();
     });
     row.querySelector('.postulacion-checkbox').addEventListener('change', updateBulkActionsVisibility);
-    row.querySelector('[data-action="ver-resumen"]').addEventListener('click', () => abrirModalResumen(postulacion));
+    row.querySelector('[data-action="ver-resumen"]').addEventListener('click', () => {
+        marcarComoLeido(postulacion, row);
+        abrirModalResumen(postulacion);
+    });
     row.querySelector('[data-action="ver-notas"]').addEventListener('click', () => abrirModalNotas(postulacion));
+    row.querySelector('[data-action="toggle-leido"]').addEventListener('click', () => toggleLeido(postulacion, row));
     
     const downloadBtn = row.querySelector('[data-action="ver-cv"]');
     downloadBtn.addEventListener('click', (e) => {
@@ -780,6 +792,31 @@ function abrirModalNotas(postulacion) {
         hideModal('modal-container');
     };
     showModal('modal-container');
+}
+
+// --- LEÍDO / NO LEÍDO ---
+async function marcarComoLeido(postulacion, row) {
+    const candidato = postulacion.v2_candidatos;
+    if (!candidato || candidato.read) return;
+    await supabase.from('v2_candidatos').update({ read: true }).eq('id', candidato.id);
+    candidato.read = true;
+    row.classList.remove('unread');
+    const btn = row.querySelector('[data-action="toggle-leido"]');
+    if (btn) btn.innerHTML = '<i class="fa-solid fa-eye-slash"></i>';
+}
+
+async function toggleLeido(postulacion, row) {
+    const candidato = postulacion.v2_candidatos;
+    if (!candidato) return;
+    const nuevoEstado = !candidato.read;
+    await supabase.from('v2_candidatos').update({ read: nuevoEstado }).eq('id', candidato.id);
+    candidato.read = nuevoEstado;
+    row.classList.toggle('unread', !nuevoEstado);
+    const btn = row.querySelector('[data-action="toggle-leido"]');
+    if (btn) {
+        btn.innerHTML = `<i class="fa-solid ${nuevoEstado ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
+        btn.title = nuevoEstado ? 'Marcar no leído' : 'Marcar leído';
+    }
 }
 
 // --- FUNCIONES AUXILIARES ---

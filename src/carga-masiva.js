@@ -83,21 +83,28 @@ function getStatusInfo(status) {
     }
 }
 
-function handleFileSelection(e) {
+async function getFileHash(file) {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function handleFileSelection(e) {
     const files = Array.from(e.target.files);
-    files.forEach(file => {
-        // Evitar duplicados en la cola
-        if (!fileQueue.some(item => item.file.name === file.name)) {
+    for (const file of files) {
+        const hash = await getFileHash(file);
+        if (!fileQueue.some(item => item.hash === hash)) {
             fileQueue.push({
                 id: `file-${Date.now()}-${Math.random()}`,
                 file: file,
-                status: 'pendiente', // Estados: pendiente, procesando, exito, error
+                hash: hash,
+                status: 'pendiente',
                 error: null
             });
         }
-    });
+    }
     renderQueue();
-    fileInput.value = ''; // Resetear para poder seleccionar el mismo archivo de nuevo
+    fileInput.value = '';
 }
 
 function renderQueue() {
@@ -170,7 +177,7 @@ async function processQueue() {
     renderQueue();
 
     const itemsToProcess = fileQueue.filter(item => item.status === 'pendiente');
-    const CONCURRENCY_LIMIT = 15;
+    const CONCURRENCY_LIMIT = 3;
 
     for (let i = 0; i < itemsToProcess.length; i += CONCURRENCY_LIMIT) {
         const batch = itemsToProcess.slice(i, i + CONCURRENCY_LIMIT);

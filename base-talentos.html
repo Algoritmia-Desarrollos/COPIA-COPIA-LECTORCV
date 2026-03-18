@@ -14,7 +14,7 @@
     <div class="nav-container">
       <a href="lista-avisos.html" class="nav-logo">Selecta CV</a>
       <ul class="nav-menu">
-        <li class="nav-link"><a href="lista-avisos.html" class="active">Mis Búsquedas</a></li>
+        <li class="nav-link"><a href="lista-avisos.html">Mis Búsquedas</a></li>
         <li class="nav-link"><a href="base-talentos.html">Base de datos</a></li>
         <li class="nav-link"><a href="carga-masiva.html">Carga Masiva</a></li>
         <li class="nav-link">
@@ -23,6 +23,7 @@
           </a>
         </li>
       </ul>
+      <button id="logout-btn" class="btn btn-secondary" style="font-size: 0.85rem; padding: 0.4rem 0.9rem;"><i class="fa-solid fa-right-from-bracket"></i> Salir</button>
       <button class="nav-toggle"><i class="fa-solid fa-bars"></i></button>
     </div>
   </nav>
@@ -107,8 +108,9 @@
                   <tr>
                     <th><input type="checkbox" id="select-all-checkbox"></th>
                     <th>Nombre Candidato</th>
-                    <th>Ubicación</th>
+                    <th>Carpeta</th>
                     <th>Contacto</th>
+                    <th>Fecha</th>
                     <th style="text-align: center;">Acciones</th>
                   </tr>
                 </thead>
@@ -118,6 +120,10 @@
                 <span id="select-all-page-message"></span>
                 <button id="select-all-matching-btn" class="btn btn-link" style="text-decoration: underline; color: var(--primary-color); font-weight: bold;">Seleccionar todos los que coincidan</button>
               </div>
+            </div>
+            <div style="text-align: center; padding: 1rem 0;">
+              <span id="candidates-counter" style="color: var(--text-light); font-size: 0.875rem; margin-right: 1rem;"></span>
+              <button id="load-more-btn" class="btn btn-secondary hidden">Cargar más</button>
             </div>
 
         </div>

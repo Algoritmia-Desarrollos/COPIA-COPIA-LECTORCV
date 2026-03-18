@@ -1,7 +1,7 @@
 // src/base-talentos.js
 
 import { supabase } from './supabaseClient.js';
-import { showModal, hideModal } from './utils.js';
+import { showModal, hideModal, formatRelativeDate } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const folderList = document.getElementById('folder-list');
@@ -56,6 +56,8 @@ let currentStatusFilter = 'all';
 let currentReadFilter = 'all';
 let allMatchingIds = [];
 let isSelectAllMatchingActive = false;
+const PAGE_SIZE = 100;
+let currentOffset = 0;
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
@@ -69,6 +71,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 
     const reloadCandidatesOnChange = () => {
+        currentOffset = 0;
         talentosListBody.innerHTML = '';
         loadCandidates();
     };
@@ -102,6 +105,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         currentReadFilter = readFilterSelect.value;
         reloadCandidatesOnChange();
     });
+
+    const loadMoreBtn = document.getElementById('load-more-btn');
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', () => loadCandidates(true));
+    }
 
     selectAllCheckbox.addEventListener('change', handleSelectAll);
     bulkMoveBtn.addEventListener('click', handleBulkMove);
@@ -211,6 +219,11 @@ function renderFoldersUI(counts = {}) {
                 li.querySelector('.folder-toggle').addEventListener('click', (e) => {
                     e.stopPropagation();
                     li.classList.toggle('open');
+                    const icon = li.querySelector('.folder-item > .fa-solid.fa-folder, .folder-item > .fa-solid.fa-folder-open');
+                    if (icon) {
+                        icon.classList.toggle('fa-folder', !li.classList.contains('open'));
+                        icon.classList.toggle('fa-folder-open', li.classList.contains('open'));
+                    }
                 });
             }
             li.querySelector('[data-action="edit-folder"]').addEventListener('click', (e) => {
@@ -389,13 +402,19 @@ function handleFolderClick(id, name, element) {
 
 
 // --- LÓGICA DE CANDIDATOS ---
-async function loadCandidates() {
-    talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
+async function loadCandidates(append = false) {
+    if (!append) {
+        currentOffset = 0;
+        talentosListBody.innerHTML = `<tr><td colspan="6" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
+    } else {
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        if (loadMoreBtn) { loadMoreBtn.disabled = true; loadMoreBtn.textContent = 'Cargando...'; }
+    }
 
     let query = supabase
         .from('v2_candidatos')
         .select(`
-            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read,
+            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
             v2_carpetas(nombre),
             v2_notas_historial(count)
         `, { count: 'exact' });
@@ -409,7 +428,7 @@ async function loadCandidates() {
 
     if (currentAvisoId !== 'all') {
         query = query.select(`
-            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read,
+            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
             v2_carpetas(nombre),
             v2_notas_historial(count),
             v2_postulaciones!inner(aviso_id)
@@ -437,28 +456,41 @@ async function loadCandidates() {
     // Aplicar orden
     query = query.order(currentSort.column, { ascending: currentSort.ascending });
 
-    query = query.limit(500);
+    query = query.range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
     const { data, error, count } = await query;
 
     if (error) {
         console.error("Error al cargar candidatos:", error);
-        talentosListBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">Error al cargar datos.</td></tr>`;
+        if (!append) talentosListBody.innerHTML = `<tr><td colspan="6" style="text-align: center;">Error al cargar datos.</td></tr>`;
         return;
     }
 
     totalCandidates = count;
-    renderTable(data);
+    currentOffset += (data?.length || 0);
+    renderTable(data, append);
+    updateLoadMoreBtn(count);
     updateBulkActionsVisibility();
 }
 
 
 // --- RENDERIZADO Y UI ---
-function renderTable(candidatos) {
-    talentosListBody.innerHTML = '';
+function updateLoadMoreBtn(totalCount) {
+    const btn = document.getElementById('load-more-btn');
+    const counter = document.getElementById('candidates-counter');
+    if (counter) counter.textContent = `Mostrando ${Math.min(currentOffset, totalCount)} de ${totalCount}`;
+    if (btn) {
+        btn.disabled = false;
+        btn.textContent = 'Cargar más';
+        btn.classList.toggle('hidden', currentOffset >= totalCount);
+    }
+}
+
+function renderTable(candidatos, append = false) {
+    if (!append) talentosListBody.innerHTML = '';
 
     if (!candidatos || candidatos.length === 0) {
-        talentosListBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No se encontraron candidatos para los filtros seleccionados.</td></tr>';
+        if (!append) talentosListBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No se encontraron candidatos para los filtros seleccionados.</td></tr>';
         return;
     }
 
@@ -487,6 +519,9 @@ function renderTable(candidatos) {
             <td>
                 <div style="white-space: normal;">${candidato.email || ''}</div>
                 <div class="text-light">${candidato.telefono || ''}</div>
+            </td>
+            <td style="font-size: 0.8rem; color: var(--text-light); white-space: nowrap;" title="${candidato.created_at ? new Date(candidato.created_at).toLocaleDateString('es-AR') : ''}">
+                ${formatRelativeDate(candidato.created_at)}
             </td>
             <td class="actions-cell" style="text-align: center;">
                 <button class="btn btn-secondary btn-sm" data-action="toggle-actions">
@@ -543,7 +578,7 @@ function toggleActionRow(row) {
         const readButtonIcon = isRead ? 'fa-eye-slash' : 'fa-eye';
 
         actionRow.innerHTML = `
-            <td colspan="5">
+            <td colspan="6">
                 <div class="actions-container">
                     <button class="btn btn-secondary btn-sm" data-action="toggle-read">
                         <i class="fa-solid ${readButtonIcon}"></i> ${readButtonText}

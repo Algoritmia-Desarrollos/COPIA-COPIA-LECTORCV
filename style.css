@@ -164,7 +164,7 @@ a:hover { color: var(--primary-hover); }
 }
 .btn-danger:hover { background-color: #fecaca; }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
-.btn-sm { padding: 0.4rem 0.8rem; font-size: 0.8rem; }
+.btn-sm { padding: 0.25rem 0.5rem; font-size: 0.75rem; line-height: 1.2; }
 
 /* Formularios */
 .form-section { margin-bottom: 1.5rem; }
@@ -226,8 +226,9 @@ a:hover { color: var(--primary-hover); }
   table-layout: fixed; /* Asegura que las columnas respeten el ancho */
 }
 .data-table th, .data-table td {
-  padding: 1rem;
+  padding: 0.4rem 0.6rem;
   vertical-align: middle;
+  font-size: 0.8rem;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis; /* Añade "..." si el texto no cabe */
@@ -235,16 +236,25 @@ a:hover { color: var(--primary-hover); }
 /* Estilo para el nombre en negrita y el archivo debajo */
 .data-table td .candidate-name {
     font-weight: 600;
+    font-size: 0.82rem;
     color: var(--text-dark);
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
+    line-height: 1.3;
 }
 .data-table td .candidate-filename {
-    font-size: 0.8rem;
-    color: var(--text-light);
+    font-size: 0.65rem;
+    color: #b0b8c9;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     display: block;
-    max-width: 250px; /* Ajusta según sea necesario */
+    max-width: 260px;
+    line-height: 1.2;
+    opacity: 0.8;
 }
 .data-table tbody tr {
     transition: background-color 0.2s ease, box-shadow 0.2s ease;
@@ -262,9 +272,9 @@ a:hover { color: var(--primary-hover); }
   font-weight: 600;
   color: var(--text-light);
   background-color: var(--bg-light);
-  font-size: 0.75rem;
+  font-size: 0.68rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   border-bottom: 1px solid var(--border-color);
 }
 .actions-group { 
@@ -369,16 +379,19 @@ a:hover { color: var(--primary-hover); }
   gap: 2rem; align-items: flex-start;
 }
 .sidebar-wrapper { position: sticky; top: 90px; }
-.folder-list { list-style: none; padding: 0; margin: 0; }
+.folder-list { list-style: none; padding: 0; margin: 0; max-height: 55vh; overflow-y: auto; overflow-x: hidden; }
 .folder-list .folder-item {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  padding: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: background-color 0.2s;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 .folder-list .folder-item:hover { background-color: var(--bg-light); }
 .folder-list + .folder-actions {
@@ -392,11 +405,34 @@ a:hover { color: var(--primary-hover); }
 
 /* Estilos para Drag & Drop de Carpetas */
 .folder-subtree {
-  list-style: none;
-  padding-left: 0;
+    list-style: none;
+    padding-left: 0;
+    margin-left: 1.25rem;
+    border-left: 2px solid #c7d2fe;
+    overflow: hidden;
+}
+.folder-subtree .folder-subtree {
+    border-left-color: #e0e7ff;
 }
 .is-subfolder {
-    background-color: #f8fafc;
+    background-color: transparent;
+    font-size: 0.875rem;
+    padding: 0.45rem 0.75rem !important;
+    color: #4b5563;
+}
+.is-subfolder:hover {
+    background-color: #eef2ff !important;
+}
+.is-subfolder.active {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+/* Carpeta padre abierta */
+li.open > .folder-item:not(.is-subfolder) {
+    background-color: #eef2ff;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    font-weight: 600;
 }
 .folder-item.dragging, .data-table tr.dragging {
   opacity: 0.5;
@@ -461,7 +497,7 @@ li.open > .folder-item .folder-toggle {
     overflow: hidden;
 }
 .data-table td, .data-table th {
-  padding: 1rem 0.75rem;
+  padding: 0.35rem 0.6rem;
 }
 .data-table th:first-child, .data-table td:first-child {
   width: 40px;
@@ -1009,6 +1045,12 @@ li.open > .folder-item .folder-toggle {
 
 .data-table tbody tr.read:hover {
     background-color: #dcfce7; /* Un verde un poco más notorio al pasar el cursor */
+}
+
+/* Filas no leídas — resaltadas */
+.data-table tbody tr.unread {
+    font-weight: 600;
+    border-left: 3px solid var(--primary-color);
 }
 
 

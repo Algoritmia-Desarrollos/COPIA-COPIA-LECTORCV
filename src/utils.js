@@ -1,6 +1,24 @@
 // src/utils.js
 
 /**
+ * Convierte una fecha a formato relativo legible.
+ * Ejemplo: "hace 3 días", "hoy", "hace 2 meses"
+ */
+export function formatRelativeDate(dateStr) {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return 'Hoy';
+    if (diffDays === 1) return 'Ayer';
+    if (diffDays < 7) return `Hace ${diffDays} días`;
+    if (diffDays < 30) return `Hace ${Math.floor(diffDays / 7)} sem.`;
+    if (diffDays < 365) return `Hace ${Math.floor(diffDays / 30)} meses`;
+    return `Hace ${Math.floor(diffDays / 365)} año(s)`;
+}
+
+/**
  * Convierte un string a "Title Case", estandarizando los nombres.
  * Ejemplo: "jUan PÉREZ" -> "Juan Pérez"
  * @param {string} str El string del nombre a formatear.
