@@ -121,6 +121,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     notesForm.addEventListener('submit', handleNotesFormSubmit);
 
     document.getElementById('select-all-matching-btn').addEventListener('click', selectAllMatching);
+    document.getElementById('export-csv-btn')?.addEventListener('click', exportarCSV);
 
     document.body.addEventListener('click', (e) => {
         const modal = e.target.closest('.modal-overlay');
@@ -587,6 +588,7 @@ function toggleActionRow(row) {
                     <button class="btn btn-primary btn-sm" data-action="view-cv"><i class="fa-solid fa-download"></i> Ver CV Original</button>
                     <button class="btn btn-secondary btn-sm" data-action="edit"><i class="fa-solid fa-pencil"></i> Editar Contacto</button>
                     <button class="btn btn-secondary btn-sm" data-action="notes"><i class="fa-solid fa-note-sticky"></i> Ver/Editar Notas</button>
+                    <button class="btn btn-secondary btn-sm" data-action="view-history"><i class="fa-solid fa-clock-rotate-left"></i> Historial</button>
                     <div class="status-buttons">
                         <button class="btn btn-sm ${candidateStatus === 'bueno' ? 'active' : ''}" data-action="set-status" data-status="bueno">Buen candidato</button>
                         <button class="btn btn-sm ${candidateStatus === 'normal' || !candidateStatus ? 'active' : ''}" data-action="set-status" data-status="normal">Normal</button>
@@ -607,6 +609,7 @@ function toggleActionRow(row) {
         actionRow.querySelector('[data-action="view-text"]')?.addEventListener('click', (e) => { e.stopPropagation(); openTextModal(row.dataset.id); });
         actionRow.querySelector('[data-action="edit"]')?.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(row.dataset.id); });
         actionRow.querySelector('[data-action="notes"]')?.addEventListener('click', (e) => { e.stopPropagation(); openNotesModal(row.dataset.id); });
+        actionRow.querySelector('[data-action="view-history"]')?.addEventListener('click', (e) => { e.stopPropagation(); openHistorialModal(row.dataset.id, row.querySelector('.candidate-name')?.textContent?.trim() || 'Candidato'); });
         actionRow.querySelectorAll('[data-action="set-status"]').forEach(button => {
             button.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -641,6 +644,55 @@ function getEstadoClass(estado) {
         case 'prohibido': return 'status-prohibido';
         default: return 'status-normal';
     }
+}
+
+async function openHistorialModal(candidateId, nombre) {
+    const historialTitle = document.getElementById('historial-modal-title');
+    const historialBody = document.getElementById('historial-modal-body');
+    if (!historialBody) return;
+
+    if (historialTitle) historialTitle.textContent = `Historial — ${nombre}`;
+    historialBody.innerHTML = '<p style="padding:1rem;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando historial...</p>';
+    showModal('historial-modal-container');
+
+    const { data, error } = await supabase
+        .from('v2_postulaciones')
+        .select('calificacion, estado_postulacion, created_at, v2_avisos(titulo)')
+        .eq('candidato_id', candidateId)
+        .order('created_at', { ascending: false });
+
+    if (error || !data?.length) {
+        historialBody.innerHTML = '<p style="padding:1rem; color:var(--text-light);">No se encontraron postulaciones para este candidato.</p>';
+        return;
+    }
+
+    const scoreColor = (s) => s >= 70 ? '#16a34a' : s >= 40 ? '#d97706' : '#dc2626';
+    historialBody.innerHTML = `
+        <table class="data-table" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>Búsqueda</th>
+                    <th style="text-align:center;">Calificación</th>
+                    <th>Estado</th>
+                    <th>Fecha</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${data.map(p => {
+                    const s = p.calificacion;
+                    const sc = typeof s === 'number' && s >= 0 ? s : null;
+                    return `
+                        <tr>
+                            <td>${p.v2_avisos?.titulo || '<em>N/A</em>'}</td>
+                            <td style="text-align:center; font-weight:700; color:${sc !== null ? scoreColor(sc) : 'var(--text-light)'};">${sc !== null ? sc + '/100' : '—'}</td>
+                            <td style="font-size:0.8rem;">${p.estado_postulacion || 'sin_revisar'}</td>
+                            <td style="font-size:0.78rem; color:var(--text-light); white-space:nowrap;">${p.created_at ? new Date(p.created_at).toLocaleDateString('es-AR') : '—'}</td>
+                        </tr>
+                    `;
+                }).join('')}
+            </tbody>
+        </table>
+    `;
 }
 
 // --- ACCIONES EN LOTE Y MODALES ---
@@ -925,6 +977,105 @@ async function handleNotesFormSubmit(e) {
         if (row && !row.querySelector('.has-notes-icon')) {
             row.querySelector('.candidate-name-container').insertAdjacentHTML('beforeend', '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>');
         }
+    }
+}
+
+async function exportarCSV() {
+    const btn = document.getElementById('export-csv-btn');
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+    try {
+        // Fetch ALL matching candidates from DB (no pagination)
+        let query = supabase
+            .from('v2_candidatos')
+            .select('nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre)')
+            .order(currentSort.column, { ascending: currentSort.ascending });
+
+        if (currentFolderId === 'none') query = query.is('carpeta_id', null);
+        else if (currentFolderId !== 'all') query = query.eq('carpeta_id', currentFolderId);
+
+        if (currentAvisoId !== 'all') {
+            query = query.select('nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre), v2_postulaciones!inner(aviso_id)')
+                .eq('v2_postulaciones.aviso_id', currentAvisoId);
+        }
+        if (currentSearchTerm) {
+            const t = `%${currentSearchTerm}%`;
+            query = query.or(`nombre_candidato.ilike.${t},email.ilike.${t},telefono.ilike.${t}`);
+        }
+        if (currentStatusFilter !== 'all') {
+            currentStatusFilter === 'sin_estado' ? query = query.is('estado', null) : query = query.eq('estado', currentStatusFilter);
+        }
+        if (currentReadFilter !== 'all') query = query.eq('read', currentReadFilter === 'leido');
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const wb = new ExcelJS.Workbook();
+        wb.creator = 'Selecta CV';
+        const ws = wb.addWorksheet('Base de Talentos', { views: [{ state: 'frozen', ySplit: 1 }] });
+
+        ws.columns = [
+            { header: 'Nombre Candidato', key: 'nombre',   width: 32 },
+            { header: 'Email',            key: 'email',    width: 36 },
+            { header: 'Teléfono',         key: 'telefono', width: 18 },
+            { header: 'Carpeta',          key: 'carpeta',  width: 22 },
+            { header: 'Estado',           key: 'estado',   width: 16 },
+            { header: 'Fecha de Carga',   key: 'fecha',    width: 18 },
+        ];
+
+        // Header styling
+        const headerRow = ws.getRow(1);
+        headerRow.height = 28;
+        headerRow.eachCell(cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4338CA' } };
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+            cell.border = { bottom: { style: 'medium', color: { argb: 'FF3730A3' } } };
+        });
+
+        // Data rows
+        data.forEach((c, i) => {
+            const row = ws.addRow({
+                nombre:   c.nombre_candidato || '',
+                email:    c.email || '',
+                telefono: c.telefono || '',
+                carpeta:  c.v2_carpetas?.nombre || 'Sin Carpeta',
+                estado:   c.estado || '',
+                fecha:    c.created_at ? new Date(c.created_at).toLocaleDateString('es-AR') : '',
+            });
+            row.height = 20;
+            const bgColor = i % 2 === 0 ? 'FFF5F5FF' : 'FFFFFFFF';
+            row.eachCell({ includeEmpty: true }, cell => {
+                cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+                cell.alignment = { vertical: 'middle' };
+                cell.font = { size: 10, name: 'Calibri' };
+                cell.border = { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } };
+            });
+            // Color-code estado
+            const estadoCell = row.getCell('estado');
+            const eColors = { bueno: 'FF15803D', prohibido: 'FFB91C1C', normal: 'FF374151' };
+            const ec = eColors[c.estado];
+            if (ec) estadoCell.font = { bold: true, color: { argb: ec }, size: 10 };
+        });
+
+        ws.autoFilter = { from: 'A1', to: 'F1' };
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `base_talentos_${new Date().toLocaleDateString('es-AR').replace(/\//g, '-')}.xlsx`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error('Error al exportar:', err);
+        alert('No se pudo exportar el archivo.');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalHTML;
     }
 }
 

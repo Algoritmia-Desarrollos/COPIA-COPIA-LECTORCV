@@ -35,4 +35,21 @@ document.addEventListener('DOMContentLoaded', () => {
             link.classList.add('active');
         }
     });
+
+    // Badge de no leídos en "Base de datos"
+    try {
+        const { count: unreadCount } = await supabase
+            .from('v2_candidatos')
+            .select('id', { count: 'exact', head: true })
+            .eq('read', false);
+        if (unreadCount > 0) {
+            const dbLink = document.querySelector('.nav-menu a[href="base-talentos.html"]');
+            if (dbLink) {
+                const badge = document.createElement('span');
+                badge.className = 'nav-badge';
+                badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                dbLink.appendChild(badge);
+            }
+        }
+    } catch (e) { /* silencioso */ }
 });

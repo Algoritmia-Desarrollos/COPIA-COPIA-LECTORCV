@@ -126,6 +126,13 @@ a:hover { color: var(--primary-hover); }
   width: 100%;
 }
 .nav-link a.active { color: var(--primary-color); }
+.nav-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  background-color: #ef4444; color: #fff;
+  font-size: 0.6rem; font-weight: 700;
+  min-width: 16px; height: 16px; border-radius: 999px; padding: 0 3px;
+  margin-left: 0.35rem; line-height: 1; vertical-align: middle;
+}
 .nav-toggle { display: none; }
 
 
@@ -1065,9 +1072,11 @@ li.open > .folder-item .folder-toggle {
 
     /* Apariencia */
     padding: 1rem 1.5rem;
-    width: auto; /* El ancho se adapta al contenido */
-    box-shadow: var(--shadow-lg);
+    width: auto;
+    background-color: var(--bg-white);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.18);
     border: 1px solid var(--border-color);
+    border-radius: var(--radius-lg);
 
     /* Layout interno */
     display: flex;
@@ -1132,35 +1141,150 @@ li.open > .folder-item .folder-toggle {
 
 .filters-container {
   display: flex;
-  flex-wrap: nowrap; /* Evita que los filtros salten a la siguiente línea */
-  gap: 0.75rem;    /* Reduce el espacio entre filtros */
+  flex-wrap: wrap;
+  gap: 0.5rem;
   align-items: center;
   margin-top: 1rem;
   margin-bottom: 1.5rem;
 }
 
-/* El input de búsqueda debe ser flexible y ocupar el espacio sobrante */
 .filters-container .form-group:first-child {
-  flex-grow: 1;
-  min-width: 180px; /* Un ancho mínimo más pequeño para que no ocupe tanto */
+  flex: 2 1 200px;
+  min-width: 160px;
 }
 
-/* El resto de los filtros (desplegables) deben tener un tamaño basado en su contenido */
 .filters-container .form-group {
-  flex-grow: 0;
-  flex-shrink: 0; /* No permitir que se encojan */
+  flex: 1 1 140px;
+  min-width: 130px;
   margin-bottom: 0;
 }
 
-/* Hacemos los controles un poco más compactos para que entren mejor */
 .filters-container .form-control {
-  padding: 0.6rem 0.75rem;
-  font-size: 0.875rem; /* 14px */
+  padding: 0.5rem 0.6rem;
+  font-size: 0.82rem;
+  width: 100%;
 }
 
-/* Para pantallas más pequeñas, permitimos que los filtros vuelvan a saltar de línea */
-@media (max-width: 1280px) {
-  .filters-container {
-    flex-wrap: wrap;
-  }
+/* ===================== MODAL RICO (ANÁLISIS) ===================== */
+.modal-candidate-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 1rem;
 }
+.modal-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--primary-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.modal-contact-links { display: flex; flex-direction: column; gap: 0.2rem; }
+.contact-link {
+  color: var(--primary-color);
+  text-decoration: none;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.contact-link:hover { text-decoration: underline; }
+
+.modal-score-section { margin-bottom: 1.25rem; }
+.score-label { font-size: 0.88rem; margin-bottom: 0.4rem; color: var(--text-dark); }
+.score-bar-container { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+
+.analysis-section { margin-bottom: 1.1rem; }
+.analysis-section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.analysis-items { display: flex; flex-direction: column; gap: 0.3rem; }
+.analysis-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  font-size: 0.8rem;
+  padding: 0.25rem 0;
+}
+.analysis-item-label { font-weight: 600; color: var(--text-dark); }
+.analysis-item-justif {
+  color: var(--text-light);
+  font-size: 0.75rem;
+  flex-basis: 100%;
+  padding-left: 0.4rem;
+}
+.badge {
+  padding: 0.12rem 0.45rem;
+  border-radius: 9999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.badge-success { background: #dcfce7; color: #16a34a; }
+.badge-warning { background: #fef3c7; color: #d97706; }
+.badge-danger { background: #fee2e2; color: #dc2626; }
+
+/* ===================== NOTAS INLINE ===================== */
+.inline-notes-row td {
+  padding: 0.5rem 1rem 0.75rem !important;
+  background: #f8faff;
+  border-left: 3px solid var(--primary-color);
+}
+.inline-notes-container { display: flex; flex-direction: column; gap: 0.4rem; }
+.inline-notes-textarea {
+  min-height: 70px;
+  resize: vertical;
+  font-size: 0.82rem;
+}
+.inline-notes-actions { display: flex; gap: 0.4rem; }
+
+/* ===================== PIPELINE STATUS ===================== */
+.pipeline-select {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: white;
+  cursor: pointer;
+  max-width: 120px;
+}
+.pipeline-select.ps-en-proceso { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
+.pipeline-select.ps-entrevistado { border-color: #8b5cf6; color: #6d28d9; background: #f5f3ff; }
+.pipeline-select.ps-descartado { border-color: #ef4444; color: #b91c1c; background: #fef2f2; }
+.pipeline-select.ps-contratado { border-color: #22c55e; color: #15803d; background: #f0fdf4; }
+
+/* Stats bar */
+.stats-bar {
+  display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;
+  padding: 0.75rem 1rem; background: var(--bg-white);
+  border: 1px solid var(--border-color); border-radius: var(--radius-md);
+}
+.stat-item {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0 0.75rem; min-width: 56px; text-align: center;
+}
+.stat-item:not(:last-child) { border-right: 1px solid var(--border-color); }
+.stat-value { font-size: 1.3rem; font-weight: 700; color: var(--text-dark); line-height: 1; }
+.stat-label { font-size: 0.65rem; color: var(--text-light); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.stat-item.stat-success .stat-value { color: #16a34a; }
+.stat-item.stat-warning .stat-value { color: #d97706; }
+.stat-item.stat-danger .stat-value { color: #dc2626; }
+.stat-divider { width: 1px; height: 36px; background: var(--border-color); margin: 0 0.25rem; }

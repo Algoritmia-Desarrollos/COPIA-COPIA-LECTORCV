@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Panel de Candidatos</title>
-  
+
   <script type="module" src="src/auth-guard.js"></script>
 
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
-  
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 </head>
@@ -38,13 +38,15 @@
         <div class="panel-container">
             <h3>Avisos</h3>
             <ul id="avisos-list" class="folder-list">
-                <!-- Avisos se cargarán aquí -->
                 <li>Cargando búsquedas...</li>
             </ul>
         </div>
         <div id="bulk-actions-container" class="panel-container hidden" style="margin-top: 1.5rem;">
             <h3 id="bulk-actions-title">Acciones</h3>
             <p id="bulk-actions-count" class="text-light" style="margin-bottom: 1rem;">0 seleccionados</p>
+            <button id="compare-btn" class="btn btn-secondary hidden" style="width: 100%; margin-bottom: 0.5rem;">
+                <i class="fa-solid fa-code-compare"></i> Comparar
+            </button>
             <button id="bulk-delete-btn" class="btn btn-danger" style="width: 100%;">
                 <i class="fa-solid fa-trash-can"></i>
                 Eliminar de la Búsqueda
@@ -58,19 +60,21 @@
             <div class="actions-group">
                 <button id="upload-cv-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar CVs</button>
                 <button id="reanalize-btn" class="btn btn-warning"><i class="fa-solid fa-arrows-rotate"></i> Reanálisis</button>
-                <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles del Aviso</a>
+                <button id="export-csv-btn" class="btn btn-secondary"><i class="fa-solid fa-file-csv"></i> CSV</button>
+                <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles</a>
                 <a href="lista-avisos.html" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Volver</a>
             </div>
         </div>
 
-        <div id="postulantes-count-display" class="static-count-display" style="margin-bottom: 1rem; padding: 0.75rem 1rem; background-color: var(--bg-light); border-radius: var(--radius-md);"></div>
+        <div id="postulantes-count-display" class="static-count-display" style="margin-bottom: 0.75rem; padding: 0.75rem 1rem; background-color: var(--bg-light); border-radius: var(--radius-md);"></div>
+        <div id="aviso-stats-bar" style="margin-bottom: 1rem;"></div>
         <div id="processing-status" class="loading-indicator" style="margin-bottom: 1.5rem; text-align: left;"></div>
 
-        <div class="filters-container" style="display: flex; gap: 1rem; margin-top: 1rem; margin-bottom: 1.5rem;">
-            <div class="form-group" style="flex-grow: 1; margin-bottom: 0;">
+        <div class="filters-container">
+            <div class="form-group">
                 <input type="text" id="filtro-candidatos" class="form-control" placeholder="Buscar por nombre, email o teléfono...">
             </div>
-            <div class="form-group" style="flex-shrink: 0; margin-bottom: 0;">
+            <div class="form-group">
                 <select id="sort-select" class="form-control">
                     <option value="created_at-desc">Últimos agregados</option>
                     <option value="nombre_candidato-asc">Nombre (A-Z)</option>
@@ -78,23 +82,44 @@
                     <option value="calificacion-desc" selected>Mejor Calificación</option>
                 </select>
             </div>
+            <div class="form-group">
+                <select id="min-score-select" class="form-control">
+                    <option value="0">Todas las calificaciones</option>
+                    <option value="50">Mín. 50/100</option>
+                    <option value="60">Mín. 60/100</option>
+                    <option value="70">Mín. 70/100</option>
+                    <option value="80">Mín. 80/100</option>
+                    <option value="90">Mín. 90/100</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <select id="pipeline-filter-select" class="form-control">
+                    <option value="all">Todos los estados</option>
+                    <option value="sin_revisar">Sin revisar</option>
+                    <option value="en_proceso">En proceso</option>
+                    <option value="entrevistado">Entrevistado</option>
+                    <option value="descartado">Descartado</option>
+                    <option value="contratado">Contratado</option>
+                </select>
+            </div>
         </div>
-        
+
         <div class="table-container">
             <table id="cv-table" class="data-table">
                 <thead>
                     <tr>
-                        <th style="width: 5%;"><input type="checkbox" id="select-all-checkbox"></th>
-                        <th style="width: 28%;">Nombre Candidato</th>
-                        <th style="width: 24%;">Contacto</th>
-                        <th style="width: 10%;">Fecha</th>
+                        <th style="width: 4%;"><input type="checkbox" id="select-all-checkbox"></th>
+                        <th style="width: 22%;">Nombre Candidato</th>
+                        <th style="width: 20%;">Contacto</th>
+                        <th style="width: 8%;">Fecha</th>
                         <th style="width: 8%;">Calificación</th>
-                        <th style="width: 10%;">Análisis</th>
-                        <th style="width: 10%; text-align: right;">Acciones</th>
+                        <th style="width: 12%;">Estado</th>
+                        <th style="width: 8%;">Análisis</th>
+                        <th style="width: 8%; text-align: right;">Acciones</th>
                     </tr>
                 </thead>
                 <tbody id="resumenes-list">
-                    <tr><td colspan="6" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>
+                    <tr><td colspan="8" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -108,20 +133,32 @@
                 <h2 id="modal-title"></h2>
                 <button class="modal-close-btn">&times;</button>
             </div>
-            <div id="modal-body" class="modal-body" style="max-height: 60vh; overflow-y: auto;">
-                <div id="modal-resumen-content" style="white-space: pre-wrap;"></div>
-                <textarea id="modal-notas-textarea" class="form-control hidden" style="min-height: 150px;" placeholder="Escribe tus notas aquí..."></textarea>
+            <div id="modal-body" class="modal-body" style="max-height: 65vh; overflow-y: auto;">
+                <div id="modal-resumen-content"></div>
             </div>
             <div class="modal-footer">
-                <button id="modal-save-notes" class="btn btn-primary hidden">Guardar Notas</button>
                 <button class="btn btn-secondary modal-close-btn">Cerrar</button>
             </div>
         </div>
     </div>
 </div>
 
+  <div id="compare-modal-container" class="modal-overlay hidden">
+    <div class="modal-container">
+        <div class="modal-content" style="max-width: 1100px; width: 96vw;">
+            <div class="modal-header">
+                <h2>Comparación de Candidatos</h2>
+                <button class="modal-close-btn">&times;</button>
+            </div>
+            <div id="compare-modal-body" class="modal-body" style="max-height: 80vh; overflow-y: auto;"></div>
+            <div class="modal-footer"><button class="btn btn-secondary modal-close-btn">Cerrar</button></div>
+        </div>
+    </div>
+</div>
+
   <script>document.querySelector('.nav-toggle').addEventListener('click', () => {document.querySelector('.nav-menu').classList.toggle('active');});</script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
   <script type="module" src="src/resumenes.js"></script>
 </body>
 </html>

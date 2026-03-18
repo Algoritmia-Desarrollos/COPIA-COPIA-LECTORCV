@@ -23,9 +23,13 @@ const modalResumenContent = document.getElementById('modal-resumen-content');
 const modalNotasTextarea = document.getElementById('modal-notas-textarea');
 const filtroInput = document.getElementById('filtro-candidatos');
 const sortSelect = document.getElementById('sort-select');
+const minScoreSelect = document.getElementById('min-score-select');
+const pipelineFilterSelect = document.getElementById('pipeline-filter-select');
+const exportCsvBtn = document.getElementById('export-csv-btn');
 // --- ESTADO DE LA APLICACIÓN ---
 let avisoActivo = null;
 let postulacionesCache = [];
+let estadoPipelineEnabled = false;
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
@@ -68,6 +72,11 @@ window.addEventListener('DOMContentLoaded', async () => {
         });
     }
     pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
+    if (minScoreSelect) minScoreSelect.addEventListener('change', applyFiltersAndSort);
+    if (pipelineFilterSelect) pipelineFilterSelect.addEventListener('change', applyFiltersAndSort);
+    if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportarCSV);
+    document.getElementById('compare-btn')?.addEventListener('click', abrirModalComparacion);
 
     await cargarAvisos();
 
@@ -126,8 +135,9 @@ function applyFiltersAndSort() {
     let data = [...postulacionesCache];
     const searchTerm = filtroInput.value.toLowerCase().trim();
     const sortValue = sortSelect.value;
+    const minScore = parseInt(minScoreSelect?.value || '0', 10);
+    const pipelineFilter = pipelineFilterSelect?.value || 'all';
 
-    // 1. Aplicar filtro de búsqueda si hay un término de búsqueda
     if (searchTerm) {
         data = data.filter(postulacion => {
             const candidato = postulacion.v2_candidatos;
@@ -139,7 +149,17 @@ function applyFiltersAndSort() {
         });
     }
 
-    // 2. Aplicar ordenamiento
+    if (minScore > 0) {
+        data = data.filter(p => typeof p.calificacion === 'number' && p.calificacion >= minScore);
+    }
+
+    if (pipelineFilter !== 'all') {
+        data = data.filter(p => {
+            const estado = p.estado_postulacion || 'sin_revisar';
+            return estado === pipelineFilter;
+        });
+    }
+
     const [sortColumn, sortOrder] = sortValue.split('-');
     const sortAscending = sortOrder === 'asc';
 
@@ -149,14 +169,11 @@ function applyFiltersAndSort() {
             const nameB = b.v2_candidatos?.nombre_candidato || '';
             return sortAscending ? nameA.localeCompare(nameB) : nameB.localeCompare(nameA);
         }
-        
         if (sortColumn === 'calificacion') {
             const scoreA = a.calificacion ?? -1;
             const scoreB = b.calificacion ?? -1;
             return sortAscending ? scoreA - scoreB : scoreB - scoreA;
         }
-
-        // Default to created_at
         const dateA = new Date(a.created_at || 0);
         const dateB = new Date(b.created_at || 0);
         return sortAscending ? dateA - dateB : dateB - dateA;
@@ -195,13 +212,27 @@ async function cargarDatosDeAviso(avisoId) {
 async function cargarPostulantes(avisoId) {
     processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cargando todos los postulantes...`;
     
-    const { data, error } = await supabase
+    // Try with estado_postulacion; falls back gracefully if column doesn't exist
+    let { data, error } = await supabase
         .from('v2_postulaciones')
         .select(`
-            id, calificacion, resumen, notas, nombre_archivo_especifico, created_at,
+            id, calificacion, resumen, notas, nombre_archivo_especifico, created_at, estado_postulacion,
             v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general, read)
         `)
         .eq('aviso_id', avisoId);
+
+    if (error && (error.message?.includes('estado_postulacion') || error.code === '42703')) {
+        estadoPipelineEnabled = false;
+        ({ data, error } = await supabase
+            .from('v2_postulaciones')
+            .select(`
+                id, calificacion, resumen, notas, nombre_archivo_especifico, created_at,
+                v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general, read)
+            `)
+            .eq('aviso_id', avisoId));
+    } else {
+        estadoPipelineEnabled = true;
+    }
 
     if (error) {
         console.error("Error al cargar postulantes:", error);
@@ -211,6 +242,7 @@ async function cargarPostulantes(avisoId) {
     
     postulacionesCache = data || [];
     applyFiltersAndSort(); // Aplicar filtros y orden inicial
+    renderStatsBar();
     processingStatus.innerHTML = ''; // Limpiar después de la carga inicial
 }
 
@@ -570,6 +602,7 @@ function actualizarFilaEnVista(postulacionId, datosActualizados) {
             oldRow.replaceWith(newRow);
         }
     }
+    renderStatsBar();
 }
 
 function crearFila(postulacion) {
@@ -591,26 +624,50 @@ function crearFila(postulacion) {
 
     if (!isLeido) row.classList.add('unread');
 
+    const telefonoWA = telefono.replace(/\D/g, '');
+    const msgWA = encodeURIComponent(`Hola ${nombre}, te contactamos en relación a tu postulación.`);
+    const waBtnHTML = telefonoWA ? `<a href="https://wa.me/${telefonoWA}?text=${msgWA}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Enviar WhatsApp" style="display:inline-flex;align-items:center;"><i class="fa-brands fa-whatsapp" style="color:#25d366; font-size:1rem;"></i></a>` : '';
+
+    const estadoPipeline = postulacion.estado_postulacion || 'sin_revisar';
+    const pipelineClass = {
+        en_proceso: 'ps-en-proceso',
+        entrevistado: 'ps-entrevistado',
+        descartado: 'ps-descartado',
+        contratado: 'ps-contratado'
+    }[estadoPipeline] || '';
+
     row.innerHTML = `
         <td><input type="checkbox" class="postulacion-checkbox" data-id="${postulacion.id}"></td>
         <td>
-            <strong>${nombre} ${tieneNota ? '<i class="fa-solid fa-note-sticky text-light"></i>' : ''}</strong>
-            <div class="text-light" style="font-size: 0.8rem;">${postulacion.nombre_archivo_especifico || 'No Identificado'}</div>
+            <strong class="candidate-name">${nombre} ${tieneNota ? '<i class="fa-solid fa-note-sticky text-light" style="font-size:0.75rem;"></i>' : ''}</strong>
+            <div class="candidate-filename">${postulacion.nombre_archivo_especifico || 'No Identificado'}</div>
         </td>
         <td>
-            <div style="white-space: normal; overflow: visible;">${email}</div>
-            <div class="text-light">${telefono}</div>
+            <div style="white-space: normal; overflow: visible; font-size:0.8rem;">${email}</div>
+            <div style="display:flex; align-items:center; gap:0.3rem; flex-wrap:wrap;">
+                <span class="text-light" style="font-size:0.75rem;">${telefono}</span>
+                ${waBtnHTML}
+            </div>
         </td>
-        <td style="font-size: 0.8rem; color: var(--text-light); white-space: nowrap;" title="${postulacion.created_at ? new Date(postulacion.created_at).toLocaleDateString('es-AR') : ''}">${fechaPostulacion}</td>
+        <td style="font-size: 0.78rem; color: var(--text-light); white-space: nowrap;" title="${postulacion.created_at ? new Date(postulacion.created_at).toLocaleDateString('es-AR') : ''}">${fechaPostulacion}</td>
         <td>${calificacionHTML}</td>
-        <td><button class="btn btn-secondary btn-sm" data-action="ver-resumen" ${!postulacion.resumen ? 'disabled' : ''}>Análisis</button></td>
+        <td>
+            ${estadoPipelineEnabled ? `<select class="pipeline-select ${pipelineClass}" data-action="set-pipeline">
+                <option value="sin_revisar" ${estadoPipeline === 'sin_revisar' ? 'selected' : ''}>Sin revisar</option>
+                <option value="en_proceso" ${estadoPipeline === 'en_proceso' ? 'selected' : ''}>En proceso</option>
+                <option value="entrevistado" ${estadoPipeline === 'entrevistado' ? 'selected' : ''}>Entrevistado</option>
+                <option value="descartado" ${estadoPipeline === 'descartado' ? 'selected' : ''}>Descartado</option>
+                <option value="contratado" ${estadoPipeline === 'contratado' ? 'selected' : ''}>Contratado</option>
+            </select>` : '<span style="font-size:0.72rem; color:var(--text-light);">—</span>'}
+        </td>
+        <td><button class="btn btn-secondary btn-sm" data-action="ver-resumen" ${!postulacion.resumen ? 'disabled' : ''}><i class="fa-solid fa-chart-bar"></i></button></td>
         <td>
             <div class="actions-group">
-                <button class="btn btn-secondary btn-sm" data-action="ver-notas" title="Notas"><i class="fa-solid fa-note-sticky"></i></button>
+                <button class="btn btn-secondary btn-sm" data-action="ver-notas" title="${tieneNota ? 'Ver notas' : 'Agregar nota'}"><i class="fa-solid fa-note-sticky${tieneNota ? '' : '-o'}"></i></button>
                 <button class="btn btn-secondary btn-sm" data-action="toggle-leido" title="${isLeido ? 'Marcar no leído' : 'Marcar leído'}">
                     <i class="fa-solid ${isLeido ? 'fa-eye-slash' : 'fa-eye'}"></i>
                 </button>
-                <button class="btn btn-primary btn-sm" data-action="ver-cv" title="Descargar CV General"><i class="fa-solid fa-download"></i></button>
+                <button class="btn btn-primary btn-sm" data-action="ver-cv" title="Descargar CV"><i class="fa-solid fa-download"></i></button>
             </div>
         </td>
     `;
@@ -626,7 +683,19 @@ function crearFila(postulacion) {
         marcarComoLeido(postulacion, row);
         abrirModalResumen(postulacion);
     });
-    row.querySelector('[data-action="ver-notas"]').addEventListener('click', () => abrirModalNotas(postulacion));
+    row.querySelector('[data-action="ver-notas"]').addEventListener('click', () => toggleInlineNotas(postulacion, row));
+
+    const pipelineSel = row.querySelector('[data-action="set-pipeline"]');
+    if (pipelineSel) {
+        pipelineSel.addEventListener('change', () => {
+            const nuevoEstado = pipelineSel.value;
+            // Update class
+            pipelineSel.className = 'pipeline-select';
+            if (nuevoEstado !== 'sin_revisar') pipelineSel.classList.add(`ps-${nuevoEstado}`);
+            updateEstadoPipeline(postulacion.id, nuevoEstado);
+            postulacion.estado_postulacion = nuevoEstado;
+        });
+    }
     row.querySelector('[data-action="toggle-leido"]').addEventListener('click', () => toggleLeido(postulacion, row));
     
     const downloadBtn = row.querySelector('[data-action="ver-cv"]');
@@ -733,6 +802,11 @@ function updateBulkActionsVisibility() {
     if (bulkActionsCount) {
         bulkActionsCount.textContent = `${selectedIds.length} seleccionados`;
     }
+
+    const compareBtn = document.getElementById('compare-btn');
+    if (compareBtn) {
+        compareBtn.classList.toggle('hidden', selectedIds.length < 2 || selectedIds.length > 3);
+    }
 }
 
 selectAllCheckbox.addEventListener('change', (e) => {
@@ -755,43 +829,272 @@ bulkDeleteBtn.addEventListener('click', async () => {
     }
 });
 
-// --- MODALES ---
+// --- MODAL RICO DE ANÁLISIS ---
 function abrirModalResumen(postulacion) {
-    const nombre = postulacion.v2_candidatos?.nombre_candidato || postulacion.nombre_candidato_snapshot;
-    modalTitle.textContent = `Análisis de ${nombre}`;
-    
-    modalResumenContent.innerHTML = `<h4>Calificación: ${postulacion.calificacion}/100</h4><p>${postulacion.resumen || 'No hay análisis.'}</p>`;
-    modalResumenContent.classList.remove('hidden');
-    modalNotasTextarea.classList.add('hidden');
-    
-    modalSaveNotesBtn.classList.add('hidden');
+    const candidato = postulacion.v2_candidatos;
+    const nombre = candidato?.nombre_candidato || postulacion.nombre_candidato_snapshot || 'N/A';
+    const email = candidato?.email || '';
+    const telefono = candidato?.telefono || '';
+    const score = postulacion.calificacion ?? 0;
+    modalTitle.textContent = nombre;
+
+    const scoreColor = score >= 70 ? '#16a34a' : score >= 50 ? '#d97706' : '#dc2626';
+    const initials = nombre.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+    modalResumenContent.innerHTML = `
+        <div class="modal-candidate-header">
+            <div class="modal-avatar">${initials}</div>
+            <div class="modal-contact-links">
+                ${email ? `<a href="mailto:${email}" class="contact-link"><i class="fa-solid fa-envelope"></i> ${email}</a>` : ''}
+                ${telefono ? `<a href="tel:${telefono}" class="contact-link"><i class="fa-solid fa-phone"></i> ${telefono}</a>` : ''}
+            </div>
+        </div>
+        <div class="modal-score-section">
+            <div class="score-label">Calificación: <strong style="color:${scoreColor}">${score}/100</strong></div>
+            <div class="score-bar-container">
+                <div class="score-bar-fill" style="width:${score}%; background-color:${scoreColor};"></div>
+            </div>
+        </div>
+        ${renderResumenEstructurado(postulacion.resumen)}
+    `;
+
     showModal('modal-container');
 }
 
-function abrirModalNotas(postulacion) {
-    const nombre = postulacion.v2_candidatos?.nombre_candidato || postulacion.nombre_candidato_snapshot;
-    modalTitle.textContent = `Notas sobre ${nombre}`;
-    
-    modalNotasTextarea.value = postulacion.notas || '';
-    modalNotasTextarea.classList.remove('hidden');
-    modalResumenContent.classList.add('hidden');
-    
-    modalSaveNotesBtn.classList.remove('hidden');
-    modalSaveNotesBtn.onclick = async () => {
-        const nuevasNotas = modalNotasTextarea.value;
-        const { error } = await supabase.from('v2_postulaciones').update({ notas: nuevasNotas }).eq('id', postulacion.id);
-
-        if (error) {
-            alert('No se pudo guardar la nota.');
-            console.error(error);
-        } else {
-            // Actualiza la cache y re-renderiza la tabla para mostrar el ícono
-            actualizarFilaEnVista(postulacion.id, { notas: nuevasNotas });
+function renderResumenEstructurado(resumen) {
+    if (!resumen) return '<p style="color:var(--text-light);">No hay análisis disponible.</p>';
+    const lines = resumen.split('\n').map(l => l.trim()).filter(l => l);
+    const sections = [];
+    let current = null;
+    lines.forEach(line => {
+        if (line === '---' || line.startsWith('CONCLUSIÓN:')) return;
+        if (/^[A-C]\)/.test(line)) {
+            if (current) sections.push(current);
+            current = { title: line, items: [] };
+        } else if (current && /^[✅🟠❌]/.test(line)) {
+            current.items.push(line);
         }
-        
-        hideModal('modal-container');
-    };
-    showModal('modal-container');
+    });
+    if (current) sections.push(current);
+
+    return sections.map(sec => {
+        const itemsHTML = sec.items.map(item => {
+            const emoji = [...item][0];
+            const badgeClass = emoji === '✅' ? 'badge-success' : emoji === '🟠' ? 'badge-warning' : 'badge-danger';
+            const badgeText = emoji === '✅' ? 'Cumple' : emoji === '🟠' ? 'Parcial' : 'No Cumple';
+            const text = item.replace(/^.\s*/, '');
+            const colonIdx = text.indexOf(':');
+            let label = text, justif = '';
+            if (colonIdx > -1) {
+                label = text.substring(0, colonIdx).trim();
+                justif = text.substring(colonIdx + 1).trim()
+                    .replace(/^(Cumple|Parcial|No Cumple|Cumplido|No Cumplido|Alta|Media|Baja|Sí|No|>3 años|1-3 años|<1 año)\.\s*/i, '');
+            }
+            return `<div class="analysis-item">
+                <span class="analysis-item-label">${label}</span>
+                <span class="badge ${badgeClass}">${badgeText}</span>
+                ${justif ? `<span class="analysis-item-justif">${justif}</span>` : ''}
+            </div>`;
+        }).join('');
+        return `<div class="analysis-section">
+            <div class="analysis-section-title">${sec.title}</div>
+            <div class="analysis-items">${itemsHTML}</div>
+        </div>`;
+    }).join('');
+}
+
+// --- NOTAS INLINE ---
+function toggleInlineNotas(postulacion, row) {
+    const existingRow = document.getElementById(`notas-row-${postulacion.id}`);
+    if (existingRow) { existingRow.remove(); return; }
+    document.querySelectorAll('.inline-notes-row').forEach(r => r.remove());
+
+    const notasRow = document.createElement('tr');
+    notasRow.id = `notas-row-${postulacion.id}`;
+    notasRow.className = 'inline-notes-row';
+    notasRow.innerHTML = `
+        <td colspan="8">
+            <div class="inline-notes-container">
+                <textarea class="inline-notes-textarea form-control" placeholder="Escribe una nota sobre este candidato...">${postulacion.notas || ''}</textarea>
+                <div class="inline-notes-actions">
+                    <button class="btn btn-primary btn-sm" data-action="save-notas-inline">Guardar</button>
+                    <button class="btn btn-secondary btn-sm" data-action="cancel-notas-inline">Cancelar</button>
+                </div>
+            </div>
+        </td>
+    `;
+    row.insertAdjacentElement('afterend', notasRow);
+    notasRow.querySelector('textarea').focus();
+    notasRow.querySelector('[data-action="save-notas-inline"]').addEventListener('click', async () => {
+        const nuevasNotas = notasRow.querySelector('textarea').value;
+        const { error } = await supabase.from('v2_postulaciones').update({ notas: nuevasNotas }).eq('id', postulacion.id);
+        if (!error) {
+            actualizarFilaEnVista(postulacion.id, { notas: nuevasNotas });
+            notasRow.remove();
+        }
+    });
+    notasRow.querySelector('[data-action="cancel-notas-inline"]').addEventListener('click', () => notasRow.remove());
+}
+
+// --- STATS BAR ---
+function renderStatsBar() {
+    const container = document.getElementById('aviso-stats-bar');
+    if (!container) return;
+    if (!postulacionesCache.length) { container.innerHTML = ''; return; }
+
+    const conScore = postulacionesCache.filter(p => typeof p.calificacion === 'number' && p.calificacion >= 0);
+    const avgScore = conScore.length ? Math.round(conScore.reduce((s, p) => s + p.calificacion, 0) / conScore.length) : 0;
+    const altos = conScore.filter(p => p.calificacion >= 70).length;
+    const medios = conScore.filter(p => p.calificacion >= 40 && p.calificacion < 70).length;
+    const bajos = conScore.filter(p => p.calificacion < 40).length;
+
+    const estados = { sin_revisar: 0, en_proceso: 0, entrevistado: 0, descartado: 0, contratado: 0 };
+    postulacionesCache.forEach(p => {
+        const e = p.estado_postulacion || 'sin_revisar';
+        if (e in estados) estados[e]++;
+    });
+
+    container.innerHTML = `
+        <div class="stats-bar">
+            <div class="stat-item"><span class="stat-value">${postulacionesCache.length}</span><span class="stat-label">Total</span></div>
+            <div class="stat-item"><span class="stat-value">${avgScore}</span><span class="stat-label">Prom.</span></div>
+            <div class="stat-item stat-success"><span class="stat-value">${altos}</span><span class="stat-label">≥70</span></div>
+            <div class="stat-item stat-warning"><span class="stat-value">${medios}</span><span class="stat-label">40-69</span></div>
+            <div class="stat-item stat-danger"><span class="stat-value">${bajos}</span><span class="stat-label">&lt;40</span></div>
+            <div class="stat-divider"></div>
+            <div class="stat-item"><span class="stat-value">${estados.en_proceso}</span><span class="stat-label">En proceso</span></div>
+            <div class="stat-item"><span class="stat-value">${estados.entrevistado}</span><span class="stat-label">Entrevist.</span></div>
+            <div class="stat-item"><span class="stat-value">${estados.contratado}</span><span class="stat-label">Contratado</span></div>
+            <div class="stat-item"><span class="stat-value">${estados.descartado}</span><span class="stat-label">Descartado</span></div>
+        </div>
+    `;
+}
+
+// --- COMPARACIÓN DE CANDIDATOS ---
+function abrirModalComparacion() {
+    const selectedIds = getSelectedPostulacionIds().slice(0, 3);
+    const candidatos = postulacionesCache.filter(p => selectedIds.includes(p.id.toString()));
+    if (candidatos.length < 2) return;
+
+    const compareBody = document.getElementById('compare-modal-body');
+    compareBody.innerHTML = `
+        <div style="display: grid; grid-template-columns: repeat(${candidatos.length}, 1fr); gap: 1rem; align-items: start;">
+            ${candidatos.map(p => {
+                const c = p.v2_candidatos;
+                const nombre = c?.nombre_candidato || 'N/A';
+                const email = c?.email || '';
+                const telefono = c?.telefono || '';
+                const score = p.calificacion ?? 0;
+                const scoreColor = score >= 70 ? '#16a34a' : score >= 50 ? '#d97706' : '#dc2626';
+                const initials = nombre.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+                return `
+                    <div style="border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem;">
+                        <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:0.75rem;">
+                            <div class="modal-avatar" style="width:38px;height:38px;font-size:0.9rem;flex-shrink:0;">${initials}</div>
+                            <div>
+                                <div style="font-weight:600; font-size:0.9rem;">${nombre}</div>
+                                ${email ? `<div style="font-size:0.75rem; color:var(--text-light);">${email}</div>` : ''}
+                                ${telefono ? `<div style="font-size:0.75rem; color:var(--text-light);">${telefono}</div>` : ''}
+                            </div>
+                        </div>
+                        <div class="score-bar-container" style="margin-bottom:0.5rem;">
+                            <div class="score-bar-fill" style="width:${score}%; background-color:${scoreColor};"></div>
+                        </div>
+                        <div style="font-weight:700; color:${scoreColor}; margin-bottom:0.75rem;">${score}/100</div>
+                        <div style="font-size:0.8rem;">${renderResumenEstructurado(p.resumen)}</div>
+                    </div>
+                `;
+            }).join('')}
+        </div>
+    `;
+    showModal('compare-modal-container');
+}
+
+// --- ESTADO PIPELINE ---
+async function updateEstadoPipeline(postulacionId, estado) {
+    const { error } = await supabase.from('v2_postulaciones').update({ estado_postulacion: estado }).eq('id', postulacionId);
+    if (error) console.error('Error actualizando estado pipeline:', error);
+}
+
+// --- EXPORT XLSX (todos los candidatos del aviso, estético) ---
+async function exportarCSV() {
+    if (!postulacionesCache.length) return;
+    const aviso = avisoActivo?.titulo || 'candidatos';
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Selecta CV';
+    const ws = wb.addWorksheet('Candidatos', { views: [{ state: 'frozen', ySplit: 1 }] });
+
+    ws.columns = [
+        { header: 'Nombre Candidato',   key: 'nombre',    width: 32 },
+        { header: 'Email',              key: 'email',     width: 36 },
+        { header: 'Teléfono',           key: 'telefono',  width: 18 },
+        { header: 'Calificación',       key: 'score',     width: 14 },
+        { header: 'Estado Pipeline',    key: 'pipeline',  width: 18 },
+        { header: 'Notas',              key: 'notas',     width: 40 },
+        { header: 'Fecha Postulación',  key: 'fecha',     width: 18 },
+        { header: 'Archivo CV',         key: 'archivo',   width: 36 },
+    ];
+
+    // Header row styling
+    const headerRow = ws.getRow(1);
+    headerRow.height = 28;
+    headerRow.eachCell(cell => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4338CA' } };
+        cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11, name: 'Calibri' };
+        cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
+        cell.border = { bottom: { style: 'medium', color: { argb: 'FF3730A3' } } };
+    });
+
+    // Data rows
+    postulacionesCache.forEach((p, i) => {
+        const c = p.v2_candidatos;
+        const score = p.calificacion;
+        const row = ws.addRow({
+            nombre:   c?.nombre_candidato || '',
+            email:    c?.email || '',
+            telefono: c?.telefono || '',
+            score:    typeof score === 'number' ? score : '',
+            pipeline: p.estado_postulacion || 'sin_revisar',
+            notas:    p.notas || '',
+            fecha:    p.created_at ? new Date(p.created_at).toLocaleDateString('es-AR') : '',
+            archivo:  p.nombre_archivo_especifico || '',
+        });
+        row.height = 20;
+
+        const bgColor = i % 2 === 0 ? 'FFF5F5FF' : 'FFFFFFFF';
+        row.eachCell({ includeEmpty: true }, cell => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+            cell.alignment = { vertical: 'middle' };
+            cell.font = { size: 10, name: 'Calibri' };
+            cell.border = { bottom: { style: 'hair', color: { argb: 'FFE2E8F0' } } };
+        });
+
+        // Color-code score cell
+        const scoreCell = row.getCell('score');
+        if (typeof score === 'number') {
+            const scoreColor = score >= 70 ? 'FF16A34A' : score >= 50 ? 'FFD97706' : 'FFDC2626';
+            scoreCell.font = { bold: true, color: { argb: scoreColor }, size: 10 };
+            scoreCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+
+        // Color-code pipeline cell
+        const pipelineCell = row.getCell('pipeline');
+        const pColors = { en_proceso: 'FF1D4ED8', entrevistado: 'FF6D28D9', descartado: 'FFB91C1C', contratado: 'FF15803D' };
+        const pc = pColors[p.estado_postulacion];
+        if (pc) pipelineCell.font = { bold: true, color: { argb: pc }, size: 10 };
+    });
+
+    ws.autoFilter = { from: 'A1', to: 'H1' };
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${aviso.replace(/[^a-zA-Z0-9]/g, '_')}_candidatos.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 // --- LEÍDO / NO LEÍDO ---

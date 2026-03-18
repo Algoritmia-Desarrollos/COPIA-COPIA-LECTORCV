@@ -65,6 +65,7 @@
         <div class="panel-container">
             <div class="dashboard-header">
                 <h1 id="folder-title">Todos los Candidatos</h1>
+                <button id="export-csv-btn" class="btn btn-secondary"><i class="fa-solid fa-file-csv"></i> CSV</button>
                 <a href="carga-masiva.html" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar a Base de datos</a>
             </div>
 
@@ -194,6 +195,17 @@
   </div>
 </div>
 
+  <div id="historial-modal-container" class="modal-overlay hidden">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h2 id="historial-modal-title">Historial del Candidato</h2>
+            <button id="historial-modal-close" class="modal-close-btn">&times;</button>
+        </div>
+        <div id="historial-modal-body" class="modal-body" style="max-height: 60vh; overflow-y: auto;"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
   <script>document.querySelector('.nav-toggle').addEventListener('click', () => {document.querySelector('.nav-menu').classList.toggle('active');});</script>
   <script type="module" src="src/base-talentos.js"></script>
 </body>
