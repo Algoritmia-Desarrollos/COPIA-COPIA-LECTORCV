@@ -10,7 +10,6 @@ const processingStatus = document.getElementById('processing-status');
 const postulantesCountDisplay = document.getElementById('postulantes-count-display');
 const resumenesListBody = document.getElementById('resumenes-list');
 const detailsLinkBtn = document.getElementById('details-link-btn');
-const avisosList = document.getElementById('avisos-list');
 const selectAllCheckbox = document.getElementById('select-all-checkbox');
 const uploadCvBtn = document.getElementById('upload-cv-btn');
 const bulkActionsContainer = document.getElementById('bulk-actions-container');
@@ -29,7 +28,7 @@ const exportCsvBtn = document.getElementById('export-csv-btn');
 // --- ESTADO DE LA APLICACIÓN ---
 let avisoActivo = null;
 let postulacionesCache = [];
-let estadoPipelineEnabled = false;
+let estadoPipelineEnabled = true; // Siempre habilitado
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
@@ -78,8 +77,6 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (exportCsvBtn) exportCsvBtn.addEventListener('click', exportarCSV);
     document.getElementById('compare-btn')?.addEventListener('click', abrirModalComparacion);
 
-    await cargarAvisos();
-
     const urlParams = new URLSearchParams(window.location.search);
     const avisoId = parseInt(urlParams.get('avisoId'), 10);
 
@@ -101,26 +98,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     });
 });
 
-async function cargarAvisos() {
-    const { data, error } = await supabase.from('v2_avisos').select('id, titulo').order('created_at', { ascending: false });
-    if (error) {
-        avisosList.innerHTML = '<li>Error al cargar búsquedas</li>';
-        return;
-    }
-
-    avisosList.innerHTML = '';
-    data.forEach(aviso => {
-        const li = document.createElement('li');
-        li.innerHTML = `<a href="?avisoId=${aviso.id}" class="folder-item" data-aviso-id="${aviso.id}">${aviso.titulo}</a>`;
-        avisosList.appendChild(li);
-    });
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const currentAvisoId = parseInt(urlParams.get('avisoId'), 10);
-    if (currentAvisoId) {
-        document.querySelector(`[data-aviso-id="${currentAvisoId}"]`)?.classList.add('active');
-    }
-}
+// cargarAvisos() eliminado — la sidebar de avisos fue removida del layout
 
 // --- FILTRADO Y BÚSQUEDA ---
 let searchTimeout;
@@ -222,7 +200,7 @@ async function cargarPostulantes(avisoId) {
         .eq('aviso_id', avisoId);
 
     if (error && (error.message?.includes('estado_postulacion') || error.code === '42703')) {
-        estadoPipelineEnabled = false;
+        // Columna no existe en DB — cargar sin ella (UI igual muestra el select)
         ({ data, error } = await supabase
             .from('v2_postulaciones')
             .select(`
@@ -230,8 +208,6 @@ async function cargarPostulantes(avisoId) {
                 v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general, read)
             `)
             .eq('aviso_id', avisoId));
-    } else {
-        estadoPipelineEnabled = true;
     }
 
     if (error) {
@@ -652,13 +628,13 @@ function crearFila(postulacion) {
         <td style="font-size: 0.78rem; color: var(--text-light); white-space: nowrap;" title="${postulacion.created_at ? new Date(postulacion.created_at).toLocaleDateString('es-AR') : ''}">${fechaPostulacion}</td>
         <td>${calificacionHTML}</td>
         <td>
-            ${estadoPipelineEnabled ? `<select class="pipeline-select ${pipelineClass}" data-action="set-pipeline">
-                <option value="sin_revisar" ${estadoPipeline === 'sin_revisar' ? 'selected' : ''}>Sin revisar</option>
+            <select class="pipeline-select ${pipelineClass}" data-action="set-pipeline">
+                <option value="sin_revisar" ${estadoPipeline === 'sin_revisar' ? 'selected' : ''}>Sin estado</option>
                 <option value="en_proceso" ${estadoPipeline === 'en_proceso' ? 'selected' : ''}>En proceso</option>
                 <option value="entrevistado" ${estadoPipeline === 'entrevistado' ? 'selected' : ''}>Entrevistado</option>
                 <option value="descartado" ${estadoPipeline === 'descartado' ? 'selected' : ''}>Descartado</option>
                 <option value="contratado" ${estadoPipeline === 'contratado' ? 'selected' : ''}>Contratado</option>
-            </select>` : '<span style="font-size:0.72rem; color:var(--text-light);">—</span>'}
+            </select>
         </td>
         <td style="text-align:right;">
             <div class="actions-group" style="justify-content:flex-end;">

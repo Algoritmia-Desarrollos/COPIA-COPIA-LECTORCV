@@ -33,27 +33,18 @@
     </div>
   </nav>
 
-  <main class="main-container db-layout" style="grid-template-columns: 220px 1fr;">
-    <div class="sidebar-wrapper">
-        <div class="panel-container">
-            <h3>Avisos</h3>
-            <ul id="avisos-list" class="folder-list">
-                <li>Cargando búsquedas...</li>
-            </ul>
-        </div>
-        <div id="bulk-actions-container" class="panel-container hidden" style="margin-top: 1.5rem;">
-            <h3 id="bulk-actions-title">Acciones</h3>
-            <p id="bulk-actions-count" class="text-light" style="margin-bottom: 1rem;">0 seleccionados</p>
-            <button id="compare-btn" class="btn btn-secondary hidden" style="width: 100%; margin-bottom: 0.5rem;">
-                <i class="fa-solid fa-code-compare"></i> Comparar
-            </button>
-            <button id="bulk-delete-btn" class="btn btn-danger" style="width: 100%;">
-                <i class="fa-solid fa-trash-can"></i>
-                Eliminar de la Búsqueda
-            </button>
-        </div>
-    </div>
+  <!-- Bulk actions: barra flotante fija abajo -->
+  <div id="bulk-actions-container" class="hidden">
+      <span id="bulk-actions-count" style="font-size:0.85rem; font-weight:600;">0 seleccionados</span>
+      <button id="compare-btn" class="btn btn-secondary hidden">
+          <i class="fa-solid fa-code-compare"></i> Comparar
+      </button>
+      <button id="bulk-delete-btn" class="btn btn-danger">
+          <i class="fa-solid fa-trash-can"></i> Eliminar
+      </button>
+  </div>
 
+  <main class="main-container" style="max-width:1340px; margin:0 auto; padding:1.5rem;">
     <div class="panel-container">
         <div class="dashboard-header">
             <h1 id="panel-title">Cargando panel...</h1>
@@ -95,7 +86,7 @@
             <div class="form-group">
                 <select id="pipeline-filter-select" class="form-control">
                     <option value="all">Todos los estados</option>
-                    <option value="sin_revisar">Sin revisar</option>
+                    <option value="sin_revisar">Sin estado</option>
                     <option value="en_proceso">En proceso</option>
                     <option value="entrevistado">Entrevistado</option>
                     <option value="descartado">Descartado</option>
