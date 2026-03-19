@@ -191,24 +191,14 @@ async function cargarPostulantes(avisoId) {
     processingStatus.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Cargando todos los postulantes...`;
     
     // Try with estado_postulacion; falls back gracefully if column doesn't exist
+    // Estado se lee de v2_candidatos.estado (fuente única de verdad)
     let { data, error } = await supabase
         .from('v2_postulaciones')
         .select(`
-            id, calificacion, resumen, notas, nombre_archivo_especifico, created_at, estado_postulacion,
-            v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general, read)
+            id, calificacion, resumen, notas, nombre_archivo_especifico, created_at,
+            v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general, read, estado)
         `)
         .eq('aviso_id', avisoId);
-
-    if (error && (error.message?.includes('estado_postulacion') || error.code === '42703')) {
-        // Columna no existe en DB — cargar sin ella (UI igual muestra el select)
-        ({ data, error } = await supabase
-            .from('v2_postulaciones')
-            .select(`
-                id, calificacion, resumen, notas, nombre_archivo_especifico, created_at,
-                v2_candidatos (id, nombre_candidato, email, telefono, nombre_archivo_general, read)
-            `)
-            .eq('aviso_id', avisoId));
-    }
 
     if (error) {
         console.error("Error al cargar postulantes:", error);
@@ -604,7 +594,8 @@ function crearFila(postulacion) {
     const msgWA = encodeURIComponent(`Hola ${nombre}, te contactamos en relación a tu postulación.`);
     const waBtnHTML = telefonoWA ? `<a href="https://wa.me/${telefonoWA}?text=${msgWA}" target="wa_window" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="Enviar WhatsApp" style="display:inline-flex;align-items:center;"><i class="fa-brands fa-whatsapp" style="color:#25d366; font-size:1rem;"></i></a>` : '';
 
-    const estadoPipeline = postulacion.estado_postulacion || 'sin_revisar';
+    // Fuente única: v2_candidatos.estado
+    const estadoPipeline = candidato?.estado || 'sin_revisar';
     const pipelineClass = {
         en_proceso:   'ps-en-proceso',
         entrevistado: 'ps-entrevistado',
@@ -671,7 +662,7 @@ function crearFila(postulacion) {
             pipelineSel.className = 'pipeline-select';
             if (nuevoEstado !== 'sin_revisar') pipelineSel.classList.add(`ps-${nuevoEstado}`);
             updateEstadoPipeline(postulacion.id, nuevoEstado, candidato?.id);
-            postulacion.estado_postulacion = nuevoEstado;
+            if (candidato) candidato.estado = nuevoEstado === 'sin_revisar' ? null : nuevoEstado;
         });
     }
     row.querySelector('[data-action="toggle-leido"]').addEventListener('click', () => toggleLeido(postulacion, row));
@@ -988,30 +979,17 @@ function abrirModalComparacion() {
     showModal('compare-modal-container');
 }
 
-// --- ESTADO PIPELINE ---
+// --- ESTADO (fuente única: v2_candidatos.estado) ---
 async function updateEstadoPipeline(postulacionId, estado, candidatoId) {
-    // 1. Guardar estado en la postulación
+    if (!candidatoId) return;
+    const valorDB = estado === 'sin_revisar' ? null : estado;
     const { error } = await supabase
-        .from('v2_postulaciones')
-        .update({ estado_postulacion: estado })
-        .eq('id', postulacionId);
-    if (error) console.error('Error actualizando estado pipeline:', error);
-
-    // 2. Sincronizar con v2_candidatos
-    if (candidatoId) {
-        const estadoMap = {
-            'contratado':   'contratado',
-            'en_proceso':   'contactado',
-            'entrevistado': 'contactado',
-        };
-        const estadoCandidato = estadoMap[estado];
-        if (estadoCandidato) {
-            await supabase
-                .from('v2_candidatos')
-                .update({ estado: estadoCandidato })
-                .eq('id', candidatoId);
-        }
-    }
+        .from('v2_candidatos')
+        .update({ estado: valorDB })
+        .eq('id', candidatoId);
+    if (error) console.error('Error actualizando estado:', error);
+    // También guardar en postulacion para historial (si la columna existe)
+    supabase.from('v2_postulaciones').update({ estado_postulacion: estado }).eq('id', postulacionId).then(() => {});
 }
 
 // --- EXPORT XLSX (todos los candidatos del aviso, estético) ---
