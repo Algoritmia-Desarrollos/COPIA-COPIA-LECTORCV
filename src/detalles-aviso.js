@@ -163,14 +163,21 @@ copiarLinkBtn.addEventListener('click', () => {
 
 deleteAvisoBtn.addEventListener('click', async () => {
     if (!avisoActivo) return;
-    if (confirm(`¿Estás seguro de que quieres eliminar el aviso "${avisoActivo.titulo}"?`)) {
+    if (confirm(`¿Estás seguro de que quieres eliminar el aviso "${avisoActivo.titulo}"?\n\nLos candidatos quedan guardados en la base de datos.`)) {
         deleteAvisoBtn.disabled = true;
+        // Primero borrar postulaciones (el vínculo), los candidatos quedan intactos en v2_candidatos
+        const { error: errorPost } = await supabase.from('v2_postulaciones').delete().eq('aviso_id', avisoActivo.id);
+        if (errorPost) {
+            alert('Error al eliminar las postulaciones del aviso.');
+            deleteAvisoBtn.disabled = false;
+            return;
+        }
         const { error } = await supabase.from('v2_avisos').delete().eq('id', avisoActivo.id);
         if (error) {
             alert('Error al eliminar el aviso.');
             deleteAvisoBtn.disabled = false;
         } else {
-            alert('Aviso eliminado correctamente.');
+            alert('Aviso eliminado. Los candidatos siguen en la base de datos.');
             window.location.href = 'lista-avisos.html';
         }
     }
