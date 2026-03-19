@@ -1269,7 +1269,7 @@ li.open > .folder-item .folder-toggle {
   transition: border-color 0.15s, background 0.15s;
 }
 .pipeline-select:hover { border-color: var(--primary-color); }
-.pipeline-select.ps-en-proceso  { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
+.pipeline-select.ps-en-proceso  { border-color: #f59e0b; color: #92400e; background: #fffbeb; }
 .pipeline-select.ps-entrevistado { border-color: #8b5cf6; color: #6d28d9; background: #f5f3ff; }
 .pipeline-select.ps-descartado  { border-color: #ef4444; color: #b91c1c; background: #fef2f2; }
 .pipeline-select.ps-contratado  { border-color: #22c55e; color: #15803d; background: #f0fdf4; }

@@ -666,7 +666,7 @@ function crearFila(postulacion) {
             // Update class
             pipelineSel.className = 'pipeline-select';
             if (nuevoEstado !== 'sin_revisar') pipelineSel.classList.add(`ps-${nuevoEstado}`);
-            updateEstadoPipeline(postulacion.id, nuevoEstado);
+            updateEstadoPipeline(postulacion.id, nuevoEstado, candidato?.id);
             postulacion.estado_postulacion = nuevoEstado;
         });
     }
@@ -985,9 +985,29 @@ function abrirModalComparacion() {
 }
 
 // --- ESTADO PIPELINE ---
-async function updateEstadoPipeline(postulacionId, estado) {
-    const { error } = await supabase.from('v2_postulaciones').update({ estado_postulacion: estado }).eq('id', postulacionId);
+async function updateEstadoPipeline(postulacionId, estado, candidatoId) {
+    // 1. Guardar estado en la postulación
+    const { error } = await supabase
+        .from('v2_postulaciones')
+        .update({ estado_postulacion: estado })
+        .eq('id', postulacionId);
     if (error) console.error('Error actualizando estado pipeline:', error);
+
+    // 2. Sincronizar con v2_candidatos
+    if (candidatoId) {
+        const estadoMap = {
+            'contratado':   'contratado',
+            'en_proceso':   'contactado',
+            'entrevistado': 'contactado',
+        };
+        const estadoCandidato = estadoMap[estado];
+        if (estadoCandidato) {
+            await supabase
+                .from('v2_candidatos')
+                .update({ estado: estadoCandidato })
+                .eq('id', candidatoId);
+        }
+    }
 }
 
 // --- EXPORT XLSX (todos los candidatos del aviso, estético) ---
