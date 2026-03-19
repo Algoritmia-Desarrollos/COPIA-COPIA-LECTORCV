@@ -606,10 +606,12 @@ function crearFila(postulacion) {
 
     const estadoPipeline = postulacion.estado_postulacion || 'sin_revisar';
     const pipelineClass = {
-        en_proceso: 'ps-en-proceso',
+        en_proceso:   'ps-en-proceso',
         entrevistado: 'ps-entrevistado',
-        descartado: 'ps-descartado',
-        contratado: 'ps-contratado'
+        contactado:   'ps-contactado',
+        descartado:   'ps-descartado',
+        prohibido:    'ps-prohibido',
+        contratado:   'ps-contratado'
     }[estadoPipeline] || '';
 
     row.innerHTML = `
@@ -629,11 +631,13 @@ function crearFila(postulacion) {
         <td>${calificacionHTML}</td>
         <td>
             <select class="pipeline-select ${pipelineClass}" data-action="set-pipeline">
-                <option value="sin_revisar" ${estadoPipeline === 'sin_revisar' ? 'selected' : ''}>Sin estado</option>
-                <option value="en_proceso" ${estadoPipeline === 'en_proceso' ? 'selected' : ''}>En proceso</option>
+                <option value="sin_revisar"  ${estadoPipeline === 'sin_revisar'  ? 'selected' : ''}>Sin estado</option>
+                <option value="en_proceso"   ${estadoPipeline === 'en_proceso'   ? 'selected' : ''}>En proceso</option>
                 <option value="entrevistado" ${estadoPipeline === 'entrevistado' ? 'selected' : ''}>Entrevistado</option>
-                <option value="descartado" ${estadoPipeline === 'descartado' ? 'selected' : ''}>Descartado</option>
-                <option value="contratado" ${estadoPipeline === 'contratado' ? 'selected' : ''}>Contratado</option>
+                <option value="contactado"   ${estadoPipeline === 'contactado'   ? 'selected' : ''}>Contactado</option>
+                <option value="descartado"   ${estadoPipeline === 'descartado'   ? 'selected' : ''}>Descartado</option>
+                <option value="prohibido"    ${estadoPipeline === 'prohibido'    ? 'selected' : ''}>Prohibido</option>
+                <option value="contratado"   ${estadoPipeline === 'contratado'   ? 'selected' : ''}>Contratado</option>
             </select>
         </td>
         <td style="text-align:right;">

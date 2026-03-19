@@ -418,7 +418,7 @@ async function loadCandidates(append = false) {
             id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
             v2_carpetas(nombre),
             v2_notas_historial(count),
-            v2_postulaciones(v2_avisos(titulo))
+            v2_postulaciones(id, estado_postulacion, v2_avisos(titulo))
         `, { count: 'exact' });
 
     // Aplicar filtros
@@ -433,7 +433,7 @@ async function loadCandidates(append = false) {
             id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
             v2_carpetas(nombre),
             v2_notas_historial(count),
-            v2_postulaciones!inner(aviso_id, v2_avisos(titulo))
+            v2_postulaciones!inner(id, aviso_id, estado_postulacion, v2_avisos(titulo))
         `).eq('v2_postulaciones.aviso_id', currentAvisoId);
     }
 
@@ -508,18 +508,16 @@ function renderTable(candidatos, append = false) {
         const estadoClass = getEstadoClass(candidato.estado);
         const tieneNotas = candidato.v2_notas_historial && candidato.v2_notas_historial.length > 0 && candidato.v2_notas_historial[0].count > 0;
         const estadoActual = candidato.estado || '';
-        const isContactado = estadoActual === 'contactado';
-        const isContratado = estadoActual === 'contratado';
         const telWA = (candidato.telefono || '').replace(/\D/g, '');
         const waBtnBT = telWA ? `<a href="https://wa.me/${telWA}" target="wa_window" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="WhatsApp" style="display:inline-flex;align-items:center;" onclick="event.stopPropagation()"><i class="fa-brands fa-whatsapp" style="color:#25d366;font-size:1rem;"></i></a>` : '';
 
-        // Avisos en que participó
-        const avisos = (candidato.v2_postulaciones || [])
-            .map(p => p.v2_avisos?.titulo)
-            .filter(Boolean)
-            .filter((v, i, a) => a.indexOf(v) === i); // unique
-        const avisosHTML = avisos.length
-            ? `<div class="candidate-avisos">${avisos.map(t => `<span class="aviso-pill" title="${t}">${t}</span>`).join('')}</div>`
+        // Avisos en que participó + estado pipeline por aviso
+        // Solo mostrar avisos como pills (sin select, el estado va en la columna acciones)
+        const postulaciones = (candidato.v2_postulaciones || []).filter(p => p.v2_avisos?.titulo);
+        const avisosHTML = postulaciones.length
+            ? `<div class="candidate-avisos">${postulaciones.map(p =>
+                `<span class="aviso-pill" title="${p.v2_avisos.titulo}">${p.v2_avisos.titulo}</span>`
+              ).join('')}</div>`
             : '';
 
         row.innerHTML = `
@@ -544,18 +542,55 @@ function renderTable(candidatos, append = false) {
                 ${formatRelativeDate(candidato.created_at)}
             </td>
             <td class="actions-cell" style="text-align: right; white-space: nowrap;">
-                <button class="quick-status-btn ${isContactado ? 'qs-active-contactado' : ''}" data-quick-status="contactado" title="${isContactado ? 'Hablado ✓' : 'Marcar como contactado'}">
-                    <i class="fa-solid fa-phone-flip"></i> ${isContactado ? 'Hablado' : 'Hablar'}
-                </button>
-                <button class="quick-status-btn ${isContratado ? 'qs-active-contratado' : ''}" data-quick-status="contratado" title="${isContratado ? 'Contratado ✓' : 'Marcar como contratado'}">
-                    <i class="fa-solid fa-handshake"></i> ${isContratado ? 'Contratado' : 'Contratar'}
-                </button>
+                ${(() => {
+                    const ep = estadoActual || 'sin_revisar';
+                    const cls = { en_proceso:'ps-en-proceso', entrevistado:'ps-entrevistado', contactado:'ps-contactado', descartado:'ps-descartado', prohibido:'ps-prohibido', contratado:'ps-contratado' }[ep] || '';
+                    return `<select class="pipeline-select ${cls}" data-action="set-global-estado" style="max-width:130px;">
+                        <option value="sin_revisar"  ${ep==='sin_revisar'  ?'selected':''}>Sin estado</option>
+                        <option value="en_proceso"   ${ep==='en_proceso'   ?'selected':''}>En proceso</option>
+                        <option value="entrevistado" ${ep==='entrevistado' ?'selected':''}>Entrevistado</option>
+                        <option value="contactado"   ${ep==='contactado'   ?'selected':''}>Contactado</option>
+                        <option value="descartado"   ${ep==='descartado'   ?'selected':''}>Descartado</option>
+                        <option value="prohibido"    ${ep==='prohibido'    ?'selected':''}>Prohibido</option>
+                        <option value="contratado"   ${ep==='contratado'   ?'selected':''}>Contratado</option>
+                    </select>`;
+                })()}
                 <button class="btn btn-secondary btn-sm" data-action="toggle-actions" title="Más acciones" style="margin-left:0.4rem;">
                     <i class="fa-solid fa-chevron-down"></i>
                 </button>
             </td>
         `;
         addTableRowListeners(row);
+        // Select de estado global del candidato
+        const globalEstadoSel = row.querySelector('[data-action="set-global-estado"]');
+        if (globalEstadoSel) {
+            globalEstadoSel.addEventListener('change', async (e) => {
+                e.stopPropagation();
+                const nuevoEstado = globalEstadoSel.value;
+                const cls = { en_proceso:'ps-en-proceso', entrevistado:'ps-entrevistado', contactado:'ps-contactado', descartado:'ps-descartado', prohibido:'ps-prohibido', contratado:'ps-contratado' };
+                globalEstadoSel.className = `pipeline-select ${cls[nuevoEstado] || ''}`.trim();
+                row.dataset.estado = nuevoEstado;
+                const valorDB = nuevoEstado === 'sin_revisar' ? null : nuevoEstado;
+                await supabase.from('v2_candidatos').update({ estado: valorDB }).eq('id', candidato.id);
+            });
+        }
+        // Pipeline selects por aviso
+        row.querySelectorAll('.pipeline-select[data-postulacion-id]').forEach(sel => {
+            sel.addEventListener('change', async (e) => {
+                e.stopPropagation();
+                const nuevoEstado = sel.value;
+                const postulacionId = sel.dataset.postulacionId;
+                const candidatoIdSel = sel.dataset.candidatoId;
+                const cls = { en_proceso: 'ps-en-proceso', entrevistado: 'ps-entrevistado', descartado: 'ps-descartado', contratado: 'ps-contratado' };
+                sel.className = `pipeline-select ${cls[nuevoEstado] || ''}`.trim();
+                await supabase.from('v2_postulaciones').update({ estado_postulacion: nuevoEstado }).eq('id', postulacionId);
+                // Sincronizar con v2_candidatos
+                const estadoMap = { contratado: 'contratado', en_proceso: 'contactado', entrevistado: 'contactado' };
+                if (estadoMap[nuevoEstado] && candidatoIdSel) {
+                    await supabase.from('v2_candidatos').update({ estado: estadoMap[nuevoEstado] }).eq('id', candidatoIdSel);
+                }
+            });
+        });
         talentosListBody.appendChild(row);
     });
 }
@@ -580,24 +615,7 @@ function addTableRowListeners(row) {
         e.stopPropagation();
         toggleActionRow(row);
     });
-    row.querySelectorAll('[data-quick-status]').forEach(btn => {
-        btn.addEventListener('click', async (e) => {
-            e.stopPropagation();
-            const newStatus = btn.dataset.quickStatus;
-            const currentStatus = row.dataset.estado;
-            const statusToSet = currentStatus === newStatus ? '' : newStatus;
-            row.dataset.estado = statusToSet;
-            const { error } = await supabase.from('v2_candidatos').update({ estado: statusToSet || null }).eq('id', row.dataset.id);
-            if (error) { alert('Error al actualizar.'); return; }
-            // Refresh buttons in place
-            const isC = statusToSet === 'contactado';
-            const isH = statusToSet === 'contratado';
-            const phoneBtn = row.querySelector('[data-quick-status="contactado"]');
-            const hireBtn = row.querySelector('[data-quick-status="contratado"]');
-            if (phoneBtn) { phoneBtn.className = `quick-status-btn ${isC ? 'qs-active-contactado' : ''}`; phoneBtn.title = isC ? 'Hablado ✓' : 'Marcar como contactado'; phoneBtn.innerHTML = `<i class="fa-solid fa-phone-flip"></i> ${isC ? 'Hablado' : 'Hablar'}`; phoneBtn.dataset.quickStatus = 'contactado'; }
-            if (hireBtn) { hireBtn.className = `quick-status-btn ${isH ? 'qs-active-contratado' : ''}`; hireBtn.title = isH ? 'Contratado ✓' : 'Marcar como contratado'; hireBtn.innerHTML = `<i class="fa-solid fa-handshake"></i> ${isH ? 'Contratado' : 'Contratar'}`; hireBtn.dataset.quickStatus = 'contratado'; }
-        });
-    });
+    // quick-status buttons eliminados — reemplazados por pipeline-select global
 }
 
 function toggleActionRow(row) {
