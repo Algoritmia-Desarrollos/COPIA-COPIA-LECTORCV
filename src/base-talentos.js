@@ -1000,10 +1000,16 @@ async function openEditModal(id) {
 }
 
 async function loadAvisos() {
-    const { data, error } = await supabase
+    let query = supabase
         .from('v2_avisos')
         .select('id, titulo')
         .order('created_at', { ascending: false });
+
+    if (!ADMIN_EMAILS.includes(globalUserEmail) && globalUserId) {
+        query = query.eq('user_id', globalUserId);
+    }
+
+    const { data, error } = await query;
 
     if (error) { console.error("Error al cargar avisos:", error); return; }
 

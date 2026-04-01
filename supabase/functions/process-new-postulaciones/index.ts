@@ -1,12 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import OpenAI from 'npm:openai'  // <--- USA ESTE
-import { toTitleCase } from "https://deno.land/x/to_title_case/mod.ts";
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+function toTitleCase(str: string): string {
+  if (!str) return '';
+  return str.toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(word => {
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  }).join(' ');
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
