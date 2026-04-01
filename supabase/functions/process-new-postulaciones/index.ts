@@ -141,7 +141,7 @@ ${contextoAviso}
 ### SISTEMA DE PUNTAJE (Lógica en Código)
 
 #### A) REQUISITOS INDISPENSABLES (Análisis)
-Tu tarea es analizar cada requisito indispensable y determinar su estado. Devuelve un array de objetos en \`desglose_indispensables\`.
+Tu tarea es analizar TODOS Y CADA UNO de los requisitos indispensables presentados en el aviso original. NO OMITAS NINGUNO bajo ninguna circunstancia. Devuelve un array de objetos en \`desglose_indispensables\`. Es OBLIGATORIO que haya la misma cantidad de elementos en este array que requisitos indispensables provistos.
 
 -   **Para cada requisito**, busca "evidencia razonable" en el CV para determinar si está:
     -   \`"Cumple"\`: Hay evidencia clara de que se satisface.
@@ -202,12 +202,12 @@ Devuelve **solo** el objeto JSON. La justificación debe ser un borrador que el 
 
   const desglose_indispensables = content.desglose_indispensables || [];
   let p_indispensables = 0;
-  const estados_indispensables = desglose_indispensables.map(item => item.estado);
+  const estados_indispensables = desglose_indispensables.map(item => (item.estado || '').trim().toLowerCase());
 
-  if (estados_indispensables.includes("No Cumple")) {
+  if (estados_indispensables.includes("no cumple")) {
       p_indispensables = 0;
   } else {
-      const parciales = estados_indispensables.filter(e => e === "Parcial").length;
+      const parciales = estados_indispensables.filter(e => e === "parcial").length;
       if (parciales === 0) p_indispensables = 50;
       else if (parciales === 1) p_indispensables = 40;
       else if (parciales === 2) p_indispensables = 30;
@@ -238,19 +238,19 @@ Devuelve **solo** el objeto JSON. La justificación debe ser un borrador que el 
   let puntos_experiencia = 0;
   let puntos_logros = 0;
 
-  if (al_items_calc.funciones?.valor === 'Alta') {
+  if ((al_items_calc.funciones?.valor || '').trim().toLowerCase() === 'alta') {
       puntos_funciones = 8;
-  } else if (al_items_calc.funciones?.valor === 'Media') {
+  } else if ((al_items_calc.funciones?.valor || '').trim().toLowerCase() === 'media') {
       puntos_funciones = 4;
   }
 
-  if (al_items_calc.experiencia?.valor === '>3 años') {
+  if ((al_items_calc.experiencia?.valor || '').trim().toLowerCase() === '>3 años') {
       puntos_experiencia = 8;
-  } else if (al_items_calc.experiencia?.valor === '1-3 años') {
+  } else if ((al_items_calc.experiencia?.valor || '').trim().toLowerCase() === '1-3 años') {
       puntos_experiencia = 4;
   }
 
-  if (al_items_calc.logros?.valor === 'Sí') {
+  if ((al_items_calc.logros?.valor || '').trim().toLowerCase() === 'sí' || (al_items_calc.logros?.valor || '').trim().toLowerCase() === 'si') {
       puntos_logros = 4;
   }
 

@@ -58,9 +58,18 @@ let allMatchingIds = [];
 let isSelectAllMatchingActive = false;
 const PAGE_SIZE = 100;
 let currentOffset = 0;
+let globalUserId = null;
+let globalUserEmail = null;
+const ADMIN_EMAILS = ['admin@gmail.com'];
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+        globalUserId = session.user.id;
+        globalUserEmail = session.user.email;
+    }
+
     await Promise.all([
         loadFolders(),
         loadAvisos()
@@ -418,7 +427,7 @@ async function loadCandidates(append = false) {
             id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
             v2_carpetas(nombre),
             v2_notas_historial(count),
-            v2_postulaciones(id, estado_postulacion, v2_avisos(titulo))
+            v2_postulaciones(id, estado_postulacion, v2_avisos(titulo, user_id))
         `, { count: 'exact' });
 
     // Aplicar filtros
@@ -513,7 +522,15 @@ function renderTable(candidatos, append = false) {
 
         // Avisos en que participó + estado pipeline por aviso
         // Solo mostrar avisos como pills (sin select, el estado va en la columna acciones)
-        const postulaciones = (candidato.v2_postulaciones || []).filter(p => p.v2_avisos?.titulo);
+        
+        const isAdmin = ADMIN_EMAILS.includes(globalUserEmail);
+        let postulaciones = (candidato.v2_postulaciones || []).filter(p => p.v2_avisos?.titulo);
+        
+        if (!isAdmin) {
+            // Si NO es admin de todo el sistema, ocultar los avisos en los que no es el creador
+            postulaciones = postulaciones.filter(p => p.v2_avisos.user_id === globalUserId);
+        }
+
         const avisosHTML = postulaciones.length
             ? `<div class="candidate-avisos">${postulaciones.map(p =>
                 `<span class="aviso-pill" title="${p.v2_avisos.titulo}">${p.v2_avisos.titulo}</span>`
@@ -716,14 +733,22 @@ async function openHistorialModal(candidateId, nombre) {
     historialBody.innerHTML = '<p style="padding:1rem;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando historial...</p>';
     showModal('historial-modal-container');
 
+    const { data: { session } } = await supabase.auth.getSession();
+    const isAdmin = session && ADMIN_EMAILS.includes(session.user.email);
+
     const { data, error } = await supabase
         .from('v2_postulaciones')
-        .select('calificacion, estado_postulacion, created_at, v2_avisos(titulo)')
+        .select('calificacion, estado_postulacion, created_at, v2_avisos(titulo, user_id)')
         .eq('candidato_id', candidateId)
         .order('created_at', { ascending: false });
 
-    if (error || !data?.length) {
-        historialBody.innerHTML = '<p style="padding:1rem; color:var(--text-light);">No se encontraron postulaciones para este candidato.</p>';
+    // Filtrar los datos en la memoria si no es admin, para que no vea avisos de otros tableros
+    const filteredData = (!isAdmin) 
+        ? (data || []).filter(p => p.v2_avisos?.user_id === session?.user?.id) 
+        : data;
+
+    if (error || !filteredData?.length) {
+        historialBody.innerHTML = '<p style="padding:1rem; color:var(--text-light);">No se encontraron postulaciones accesibles para este candidato.</p>';
         return;
     }
 
@@ -739,7 +764,7 @@ async function openHistorialModal(candidateId, nombre) {
                 </tr>
             </thead>
             <tbody>
-                ${data.map(p => {
+                ${filteredData.map(p => {
                     const s = p.calificacion;
                     const sc = typeof s === 'number' && s >= 0 ? s : null;
                     return `

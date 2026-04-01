@@ -74,6 +74,7 @@ serve(async (req) => {
     DEBES devolver ABSOLUTAMENTE TODOS los ítems de "Condiciones Necesarias" en \`desglose_indispensables\` y TODOS los ítems de "Condiciones Deseables" en \`desglose_deseables\`. NO OMITAS NINGUNO bajo ninguna circunstancia, incluso si crees que el candidato no cumple el requisito. Si no tiene información, marcalo como "No Cumple" o "no cumplido".
 
     ### FORMATO DE SALIDA (JSON ÚNICO)
+    {
       "nombreCompleto": "string o null",
       "email": "string o null",
       "telefono": "string o null",
@@ -101,12 +102,12 @@ serve(async (req) => {
     // 4. Calcular el puntaje (misma lógica que tenías en el frontend)
     const desglose_indispensables = content.desglose_indispensables || [];
     let p_indispensables = 0;
-    const estados_indispensables = desglose_indispensables.map(item => item.estado);
+    const estados_indispensables = desglose_indispensables.map(item => (item.estado || '').trim().toLowerCase());
 
-    if (estados_indispensables.includes("No Cumple")) {
+    if (estados_indispensables.includes("no cumple")) {
         p_indispensables = 0;
     } else {
-        const parciales = estados_indispensables.filter(e => e === "Parcial").length;
+        const parciales = estados_indispensables.filter(e => e === "parcial").length;
         if (parciales === 0) p_indispensables = 50; else if (parciales <= 2) p_indispensables = 40 - (parciales-1)*10; else p_indispensables = 0;
     }
 
@@ -122,9 +123,13 @@ serve(async (req) => {
     }
     
     const al_items = content.justificacion_template?.alineamiento_items || {};
-    const puntos_funciones = al_items.funciones?.valor === 'Alta' ? 8 : (al_items.funciones?.valor === 'Media' ? 4 : 0);
-    const puntos_experiencia = al_items.experiencia?.valor === '>3 años' ? 8 : (al_items.experiencia?.valor === '1-3 años' ? 4 : 0);
-    const puntos_logros = al_items.logros?.valor === 'Sí' ? 4 : 0;
+    const pt_unciones = (al_items.funciones?.valor || '').trim().toLowerCase();
+    const pt_exp = (al_items.experiencia?.valor || '').trim().toLowerCase();
+    const pt_logros = (al_items.logros?.valor || '').trim().toLowerCase();
+
+    const puntos_funciones = pt_unciones === 'alta' ? 8 : (pt_unciones === 'media' ? 4 : 0);
+    const puntos_experiencia = pt_exp === '>3 años' ? 8 : (pt_exp === '1-3 años' ? 4 : 0);
+    const puntos_logros = (pt_logros === 'sí' || pt_logros === 'si') ? 4 : 0;
     const p_alineamiento = puntos_funciones + puntos_experiencia + puntos_logros;
     
     const calificacion_final = Math.round(p_indispensables + p_deseables + p_alineamiento);
