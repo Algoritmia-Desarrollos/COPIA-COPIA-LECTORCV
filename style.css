@@ -200,6 +200,10 @@ a:hover { color: var(--primary-hover); }
   border-color: var(--primary-color);
   box-shadow: 0 0 0 3px rgb(79 70 229 / 0.2);
 }
+select.form-control {
+  text-overflow: ellipsis;
+  padding-right: 2rem;
+}
 .condition-input-group { display: flex; gap: 0.5rem; }
 .add-btn {
   padding: 0 1rem;
@@ -441,6 +445,10 @@ li.open > .folder-item:not(.is-subfolder) {
     background-color: #eef2ff;
     border-radius: var(--radius-md) var(--radius-md) 0 0;
     font-weight: 600;
+}
+li.open > .folder-item.active:not(.is-subfolder) {
+    background-color: var(--primary-color);
+    color: var(--text-white);
 }
 .folder-item.dragging, .data-table tr.dragging {
   opacity: 0.5;
