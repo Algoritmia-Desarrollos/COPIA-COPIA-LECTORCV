@@ -354,20 +354,20 @@ ${contextoAviso}
 ### SISTEMA DE PUNTAJE (Lógica en Código)
 
 #### A) REQUISITOS INDISPENSABLES (Análisis)
-Tu tarea es analizar cada requisito indispensable y determinar su estado. Devuelve un array de objetos en \`desglose_indispensables\`.
+Tu tarea es analizar TODOS Y CADA UNO de los requisitos indispensables. NO OMITAS NINGUNO, aunque no se cumplan de la lista. Devuelve un array de objetos en \`desglose_indispensables\`.
 
 -   **Para cada requisito**, busca "evidencia razonable" en el CV para determinar si está:
     -   \`"Cumple"\`: Hay evidencia clara de que se satisface.
     -   \`"Parcial"\`: No hay evidencia clara, pero hay indicios o no se contradice.
-    -   \`"No Cumple"\`: Hay evidencia de que NO se satisface.
+    -   \`"No Cumple"\`: Absolutamente ninguna evidencia de que se cumple. DEBES INCLUIRLO indicando "No Cumple".
 
 #### B) COMPETENCIAS DESEABLES (Análisis)
-Tu tarea es analizar cada competencia deseable. Devuelve un array de objetos en \`desglose_deseables\`.
+Tu tarea es analizar TODAS Y CADA UNA de las competencias deseables. NO OMITAS NINGUNA, aunque no figuren en el CV. Devuelve un array de objetos en \`desglose_deseables\`.
 
 -   **Para cada competencia**, determina su estado:
     -   \`"cumplido"\`: Evidencia clara.
     -   \`"parcial"\`: Evidencia parcial (ej: pide "inglés avanzado", CV dice "inglés intermedio").
-    -   \`"no cumplido"\`: Sin evidencia o se contradice.
+    -   \`"no cumplido"\`: Sin evidencia de ello. DEBES INCLUIRLO indicando "no cumplido".
 
 #### C) ALINEAMIENTO (Análisis)
 Tu tarea es analizar cada ítem de alineamiento y determinar su valor.
@@ -859,10 +859,10 @@ function renderResumenEstructurado(resumen) {
                 justif = text.substring(colonIdx + 1).trim()
                     .replace(/^(Cumple|Parcial|No Cumple|Cumplido|No Cumplido|Alta|Media|Baja|Sí|No|>3 años|1-3 años|<1 año)\.\s*/i, '');
             }
-            return `<div class="analysis-item">
-                <span class="analysis-item-label">${label}</span>
-                <span class="badge ${badgeClass}">${badgeText}</span>
-                ${justif ? `<span class="analysis-item-justif">${justif}</span>` : ''}
+            return `<div class="analysis-item" style="margin-bottom: 0.35rem; line-height: 1.2;">
+                <span class="badge ${badgeClass}" style="font-size: 0.65rem; padding: 0.15rem 0.3rem; margin-right: 0.3rem; vertical-align: middle;">${badgeText}</span>
+                <strong style="font-size: 0.8rem; color: var(--text-dark); vertical-align: middle;">${label}</strong>
+                ${justif ? `<span style="font-size: 0.75rem; color: var(--text-light); margin-left: 0.3rem;">- ${justif}</span>` : ''}
             </div>`;
         }).join('');
         return `<div class="analysis-section">

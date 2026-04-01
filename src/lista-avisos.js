@@ -18,11 +18,24 @@ async function loadAvisos() {
     if (!avisoListBody) return;
 
     try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+            window.location.href = 'login.html';
+            return;
+        }
+
         // Hacemos una única consulta que trae los datos del aviso, incluyendo el contador.
-        const { data: avisos, error } = await supabase
+        let query = supabase
             .from('v2_avisos')
             .select('id, titulo, valido_hasta, max_cv, postulaciones_count')
             .order('created_at', { ascending: false });
+
+        // Filtrar por ID de usuario a menos que sea el administrador global
+        if (session.user.email !== 'admin@gmail.com') {
+            query = query.eq('user_id', session.user.id);
+        }
+
+        const { data: avisos, error } = await query;
 
         if (error) throw error;
 

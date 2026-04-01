@@ -14,8 +14,7 @@ if (!session) {
 
 // Si el script llega hasta aquí, significa que hay una sesión activa.
 
-// Manejar el botón de logout en todas las páginas protegidas
-document.addEventListener('DOMContentLoaded', () => {
+const initUI = async () => {
     const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', async () => {
@@ -34,22 +33,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (linkPage === currentPage || (isMisBusquedas && linkPage === 'lista-avisos.html')) {
             link.classList.add('active');
         }
-    });
+    }); // Cerramos el forEach
 
-    // Badge de no leídos en "Base de datos"
-    try {
-        const { count: unreadCount } = await supabase
-            .from('v2_candidatos')
-            .select('id', { count: 'exact', head: true })
-            .eq('read', false);
-        if (unreadCount > 0) {
-            const dbLink = document.querySelector('.nav-menu a[href="base-talentos.html"]');
-            if (dbLink) {
-                const badge = document.createElement('span');
-                badge.className = 'nav-badge';
-                badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
-                dbLink.appendChild(badge);
-            }
-        }
-    } catch (e) { /* silencioso */ }
-});
+    // (Lógica de badge eliminada según solicitud del usuario)
+};
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUI);
+} else {
+    initUI();
+}
