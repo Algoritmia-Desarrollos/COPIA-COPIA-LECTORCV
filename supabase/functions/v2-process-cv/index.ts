@@ -70,8 +70,10 @@ serve(async (req) => {
     CV (texto extraído):
     """${texto_cv_especifico.substring(0, 12000)}"""
 
+    ### REGLA MUY IMPORTANTE PARA DESGLOSES:
+    DEBES devolver ABSOLUTAMENTE TODOS los ítems de "Condiciones Necesarias" en \`desglose_indispensables\` y TODOS los ítems de "Condiciones Deseables" en \`desglose_deseables\`. NO OMITAS NINGUNO bajo ninguna circunstancia, incluso si crees que el candidato no cumple el requisito. Si no tiene información, marcalo como "No Cumple" o "no cumplido".
+
     ### FORMATO DE SALIDA (JSON ÚNICO)
-    {
       "nombreCompleto": "string o null",
       "email": "string o null",
       "telefono": "string o null",

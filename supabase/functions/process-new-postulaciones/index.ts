@@ -149,12 +149,12 @@ Tu tarea es analizar cada requisito indispensable y determinar su estado. Devuel
     -   \`"No Cumple"\`: Hay evidencia de que NO se satisface.
 
 #### B) COMPETENCIAS DESEABLES (Análisis)
-Tu tarea es analizar cada competencia deseable. Devuelve un array de objetos en \`desglose_deseables\`.
+Tu tarea es analizar TODAS Y CADA UNA de las competencias deseables presentadas en el aviso original. NO OMITAS NINGUNA bajo ninguna circunstancia. Devuelve un array de objetos en \`desglose_deseables\`. Es OBLIGATORIO que haya la misma cantidad de elementos en este array que condiciones deseables provistas.
 
--   **Para cada competencia**, determina su estado:
+-   **Para cada competencia deseable**, determina su estado:
     -   \`"cumplido"\`: Evidencia clara.
     -   \`"parcial"\`: Evidencia parcial (ej: pide "inglés avanzado", CV dice "inglés intermedio").
-    -   \`"no cumplido"\`: Sin evidencia o se contradice.
+    -   \`"no cumplido"\`: Sin evidencia de ello. DEBES INCLUIRLO indicando "no cumplido".
 
 #### C) ALINEAMIENTO (Análisis)
 Tu tarea es analizar cada ítem de alineamiento y determinar su valor.

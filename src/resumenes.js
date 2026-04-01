@@ -362,7 +362,7 @@ Tu tarea es analizar TODOS Y CADA UNO de los requisitos indispensables. NO OMITA
     -   \`"No Cumple"\`: Absolutamente ninguna evidencia de que se cumple. DEBES INCLUIRLO indicando "No Cumple".
 
 #### B) COMPETENCIAS DESEABLES (Análisis)
-Tu tarea es analizar TODAS Y CADA UNA de las competencias deseables. NO OMITAS NINGUNA, aunque no figuren en el CV. Devuelve un array de objetos en \`desglose_deseables\`.
+Tu tarea es analizar TODAS Y CADA UNA de las competencias deseables presentadas en el aviso original. NO OMITAS NINGUNA bajo ninguna circunstancia. Devuelve un array de objetos en \`desglose_deseables\`. Es OBLIGATORIO que haya la misma cantidad de elementos en este array que condiciones deseables provistas.
 
 -   **Para cada competencia**, determina su estado:
     -   \`"cumplido"\`: Evidencia clara.
