@@ -1005,9 +1005,8 @@ async function loadAvisos() {
         .select('id, titulo')
         .order('created_at', { ascending: false });
 
-    if (!ADMIN_EMAILS.includes(globalUserEmail) && globalUserId) {
-        query = query.eq('user_id', globalUserId);
-    }
+    // Todos los usuarios pueden ver todos los avisos en el filtro,
+    // para poder buscar candidatos aunque no hayan creado avisos propios todavía.
 
     const { data, error } = await query;
 
