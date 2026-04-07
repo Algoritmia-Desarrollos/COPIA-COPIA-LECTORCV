@@ -390,8 +390,42 @@ select.form-control {
   grid-template-columns: 320px 1fr;
   gap: 2rem; align-items: flex-start;
 }
-.sidebar-wrapper { position: sticky; top: 90px; }
-.folder-list { list-style: none; padding: 0; margin: 0; max-height: 55vh; overflow-y: auto; overflow-x: hidden; }
+.sidebar-wrapper {
+  position: sticky;
+  top: 90px;
+  /* Altura máxima para que no supere la pantalla */
+  max-height: calc(100vh - 110px);
+  display: flex;
+  flex-direction: column;
+}
+/* El panel-container del sidebar ocupa el espacio disponible y usa flex */
+.sidebar-wrapper > .panel-container:first-child {
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Permite que el flex shrink funcione */
+  flex: 1;
+  overflow: hidden;
+}
+.folder-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  flex: 1; /* Ocupa todo el espacio disponible */
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* Scroll suave */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-color) transparent;
+}
+.folder-list::-webkit-scrollbar { width: 4px; }
+.folder-list::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 4px; }
+/* El botón siempre visible abajo */
+.folder-actions {
+  flex-shrink: 0;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+  margin-top: 0.75rem;
+}
 .folder-list .folder-item {
   display: flex;
   align-items: center;
@@ -406,9 +440,7 @@ select.form-control {
   max-width: 100%;
 }
 .folder-list .folder-item:hover { background-color: var(--bg-light); }
-.folder-list + .folder-actions {
-  margin-top: 1rem;
-}
+/* (margin manejado por .folder-actions arriba) */
 .folder-list .folder-item.active { background-color: var(--primary-color); color: var(--text-white); }
 
 .sidebar-wrapper .panel-container + .panel-container {
