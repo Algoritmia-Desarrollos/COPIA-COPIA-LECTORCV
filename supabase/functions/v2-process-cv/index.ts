@@ -9,16 +9,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Clave secreta: usa la nueva (sb_secret_) si existe, si no cae a la legacy
+// Clave secreta: nueva inyectada por la plataforma -> secret manual -> legacy
 function getSecretKey(): string {
   const nuevas = Deno.env.get('SUPABASE_SECRET_KEYS');
   if (nuevas) {
     try {
       const parsed = JSON.parse(nuevas);
       if (parsed?.default) return parsed.default;
-    } catch (_) { /* formato inesperado, seguimos con la legacy */ }
+    } catch (_) { /* formato inesperado, seguimos con los fallbacks */ }
   }
-  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  return Deno.env.get('APP_SECRET_KEY') ?? Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 }
 
 // Se crea un cliente de Supabase con permisos de administrador para poder interactuar con la DB
