@@ -6,6 +6,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Clave secreta: usa la nueva (sb_secret_) si existe, si no cae a la legacy
+function getSecretKey(): string {
+  const nuevas = Deno.env.get('SUPABASE_SECRET_KEYS');
+  if (nuevas) {
+    try {
+      const parsed = JSON.parse(nuevas);
+      if (parsed?.default) return parsed.default;
+    } catch (_) { /* formato inesperado, seguimos con la legacy */ }
+  }
+  return Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+}
+
 function toTitleCase(str: string): string {
   if (!str) return '';
   return str.toLowerCase().trim().replace(/\s+/g, ' ').split(' ').map(word => {
@@ -21,7 +33,7 @@ serve(async (req) => {
   try {
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      getSecretKey()
     );
     
     const { postulaciones } = await req.json();
