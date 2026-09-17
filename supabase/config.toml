@@ -5,5 +5,9 @@
 [functions.selectacv]
   verify_jwt = false
 
+# Proxies de la versión anterior: validan dentro que el usuario sea miembro.
 [functions.openaiv2]
+  verify_jwt = false
+
+[functions.openai]
   verify_jwt = false
