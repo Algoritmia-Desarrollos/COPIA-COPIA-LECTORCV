@@ -1,6 +1,7 @@
 // src/lista-avisos.js
 
 import { supabase } from './supabaseClient.js';
+import { escapeHtml } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const avisoListBody = document.getElementById('aviso-list-body');
@@ -11,35 +12,20 @@ const avisoListBody = document.getElementById('aviso-list-body');
 window.addEventListener('DOMContentLoaded', loadAvisos);
 
 /**
- * Obtiene los datos de los avisos y las postulaciones desde Supabase
- * y luego llama a la función para renderizar la tabla.
+ * Obtiene los avisos desde Supabase y los dibuja en la tabla.
+ * Todos los miembros de SelectaCV ven todas las búsquedas: el acceso lo controla la base.
  */
 async function loadAvisos() {
     if (!avisoListBody) return;
 
     try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-            window.location.href = 'login.html';
-            return;
-        }
-
-        // Hacemos una única consulta que trae los datos del aviso, incluyendo el contador.
-        let query = supabase
+        const { data: avisos, error } = await supabase
             .from('v2_avisos')
             .select('id, titulo, valido_hasta, max_cv, postulaciones_count')
             .order('created_at', { ascending: false });
 
-        // Filtrar por ID de usuario a menos que sea el administrador global
-        if (session.user.email !== 'admin@gmail.com') {
-            query = query.eq('user_id', session.user.id);
-        }
-
-        const { data: avisos, error } = await query;
-
         if (error) throw error;
 
-        // Si la consulta es exitosa, renderizamos la tabla
         renderizarTabla(avisos);
 
     } catch (error) {
@@ -51,7 +37,6 @@ async function loadAvisos() {
 /**
  * Dibuja las filas de la tabla con los datos de los avisos y el conteo de postulaciones.
  * @param {Array} avisos - El array de objetos de avisos desde Supabase.
- * @param {Array} postulaciones - El array de objetos de postulaciones para contar.
  */
 function renderizarTabla(avisos) {
     // Si no hay avisos, mostrar un mensaje amigable.
@@ -60,21 +45,21 @@ function renderizarTabla(avisos) {
         return;
     }
 
-    // Limpiar el estado de "Cargando..."
-    avisoListBody.innerHTML = '';
+    const filas = document.createDocumentFragment();
 
-    // Iteramos sobre cada aviso para crear su fila en la tabla.
     avisos.forEach(aviso => {
-        // El conteo ahora viene directamente en la columna `postulaciones_count`.
+        // El conteo viene directamente en la columna `postulaciones_count`.
         const postulacionesCount = aviso.postulaciones_count;
-        
+
         // Formateamos la fecha para que sea más legible.
-        const validoHasta = new Date(aviso.valido_hasta).toLocaleDateString('es-AR', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            timeZone: 'UTC' // Importante para evitar problemas con la zona horaria del navegador
-        });
+        const validoHasta = aviso.valido_hasta
+            ? new Date(aviso.valido_hasta).toLocaleDateString('es-AR', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                timeZone: 'UTC' // Importante para evitar problemas con la zona horaria del navegador
+            })
+            : '—';
 
         const row = document.createElement('tr');
         row.style.cursor = 'pointer';
@@ -82,7 +67,7 @@ function renderizarTabla(avisos) {
 
         row.innerHTML = `
             <td>${aviso.id}</td>
-            <td><strong>${aviso.titulo}</strong></td>
+            <td><strong>${escapeHtml(aviso.titulo)}</strong></td>
             <td>${postulacionesCount} / ${aviso.max_cv || 'Ilimitados'}</td>
             <td>${validoHasta}</td>
             <td>
@@ -102,6 +87,8 @@ function renderizarTabla(avisos) {
             window.location.href = `resumenes.html?avisoId=${aviso.id}`;
         });
 
-        avisoListBody.appendChild(row);
+        filas.appendChild(row);
     });
+
+    avisoListBody.replaceChildren(filas);
 }

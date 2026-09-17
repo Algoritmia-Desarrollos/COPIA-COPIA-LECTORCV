@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Cargar CV a Base de Talentos</title>
-  
+
+  <link rel="preconnect" href="https://czocbnyoenjbpxmcqobn.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
@@ -13,7 +15,7 @@
 
   <main class="public-page-wrapper">
     <div class="panel-container" style="max-width: 600px; margin: auto;">
-      
+
       <div style="text-align: center; margin-bottom: 2rem;">
         <img src="este (3).jpg" alt="Logo de la Empresa" style="max-width: 200px;">
       </div>
@@ -29,9 +31,9 @@
           <label for="file-input" id="drop-zone" class="drop-zone">
             <i class="fa-solid fa-cloud-arrow-up upload-icon"></i>
             <span id="file-label-text" class="upload-text">Arrastra y suelta tu CV aquí o haz clic para seleccionar</span>
-            <span class="upload-hint">Solo archivos PDF, tamaño máximo: 5MB</span>
+            <span class="upload-hint">PDF o imagen (JPG, PNG), máx: 5MB</span>
           </label>
-          <input type="file" id="file-input" accept="application/pdf" hidden>
+          <input type="file" id="file-input" accept="application/pdf,image/jpeg,image/png,image/webp" hidden>
           <button type="submit" id="submit-btn" class="btn btn-primary" style="width: 100%; margin-top: 1.5rem;" disabled>
             <i class="fa-solid fa-paper-plane"></i>
             Enviar CV
@@ -47,9 +49,6 @@
     </div>
   </main>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src='https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js'></script>
-  
   <script type="module" src="src/carga-publica.js"></script>
 
 </body>

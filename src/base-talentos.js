@@ -1,7 +1,8 @@
 // src/base-talentos.js
 
 import { supabase } from './supabaseClient.js';
-import { showModal, hideModal, formatRelativeDate } from './utils.js';
+import { descargarCvCandidato, traerTodas, enLotes } from './api.js';
+import { showModal, hideModal, formatRelativeDate, escapeHtml, cargarExcelJS } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const folderList = document.getElementById('folder-list');
@@ -58,18 +59,21 @@ let allMatchingIds = [];
 let isSelectAllMatchingActive = false;
 const PAGE_SIZE = 100;
 let currentOffset = 0;
-let globalUserId = null;
-let globalUserEmail = null;
-const ADMIN_EMAILS = ['admin@gmail.com'];
+let consultaActual = 0; // descarta respuestas viejas si el usuario cambia de filtro rápido
+
+const CLASES_PIPELINE = { en_proceso: 'ps-en-proceso', entrevistado: 'ps-entrevistado', contactado: 'ps-contactado', descartado: 'ps-descartado', prohibido: 'ps-prohibido', contratado: 'ps-contratado' };
+const ESTADOS_PIPELINE = [
+    ['sin_revisar', 'Sin estado'],
+    ['en_proceso', 'En proceso'],
+    ['entrevistado', 'Entrevistado'],
+    ['contactado', 'Contactado'],
+    ['descartado', 'Descartado'],
+    ['prohibido', 'Prohibido'],
+    ['contratado', 'Contratado'],
+];
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-        globalUserId = session.user.id;
-        globalUserEmail = session.user.email;
-    }
-
     await Promise.all([
         loadFolders(),
         loadAvisos()
@@ -81,7 +85,6 @@ window.addEventListener('DOMContentLoaded', async () => {
 
     const reloadCandidatesOnChange = () => {
         currentOffset = 0;
-        talentosListBody.innerHTML = '';
         loadCandidates();
     };
 
@@ -91,7 +94,7 @@ window.addEventListener('DOMContentLoaded', async () => {
         searchTimeout = setTimeout(() => {
             currentSearchTerm = filtroInput.value;
             reloadCandidatesOnChange();
-        }, 500);
+        }, 400);
     });
 
     sortSelect.addEventListener('change', () => {
@@ -130,7 +133,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     notesForm.addEventListener('submit', handleNotesFormSubmit);
 
     document.getElementById('select-all-matching-btn').addEventListener('click', selectAllMatching);
-    document.getElementById('export-csv-btn')?.addEventListener('click', exportarCSV);
+    document.getElementById('export-csv-btn')?.addEventListener('click', exportarExcel);
 
     document.body.addEventListener('click', (e) => {
         const modal = e.target.closest('.modal-overlay');
@@ -143,12 +146,13 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 // --- LÓGICA DE CARPETAS ---
 async function loadFolders() {
-    const { data: foldersData, error: foldersError } = await supabase.from('v2_carpetas').select('*').order('nombre');
+    const [{ data: foldersData, error: foldersError }, { data: countsData, error: countsError }] = await Promise.all([
+        supabase.from('v2_carpetas').select('id, nombre, parent_id').order('nombre'),
+        supabase.rpc('get_folder_counts'),
+    ]);
     if (foldersError) { console.error("Error al cargar carpetas:", foldersError); return; }
-
-    const { data: countsData, error: countsError } = await supabase.rpc('get_folder_counts');
-    if (countsError) { 
-        console.error("Error al obtener conteos:", countsError); 
+    if (countsError) {
+        console.error("Error al obtener conteos:", countsError);
         return;
     }
 
@@ -156,9 +160,9 @@ async function loadFolders() {
         acc[item.folder_id === null ? 'none' : item.folder_id] = item.candidate_count;
         return acc;
     }, {});
-    
+
     counts['all'] = countsData.reduce((sum, item) => sum + parseInt(item.candidate_count, 10), 0);
-    
+
     carpetasCache = foldersData;
     renderFoldersUI(counts);
     populateFolderSelects();
@@ -166,7 +170,7 @@ async function loadFolders() {
 
 
 function renderFoldersUI(counts = {}) {
-    folderList.innerHTML = ''; 
+    folderList.innerHTML = '';
 
     ['Todos los Candidatos', 'Sin Carpeta'].forEach(name => {
         const id = name === 'Todos los Candidatos' ? 'all' : 'none';
@@ -177,9 +181,9 @@ function renderFoldersUI(counts = {}) {
         folderItem.className = 'folder-item';
         folderItem.dataset.folderId = id;
         folderItem.innerHTML = `<i class="fa-solid ${icon}"></i> <span class="folder-name">${name}</span> <span class="folder-count">(${count})</span>`;
-        
+
         folderItem.addEventListener('click', (e) => handleFolderClick(id, name, e.currentTarget));
-        
+
         if (id === 'none') {
             folderItem.addEventListener('dragover', handleDragOver);
             folderItem.addEventListener('dragleave', handleDragLeave);
@@ -215,8 +219,8 @@ function renderFoldersUI(counts = {}) {
             li.innerHTML = `
                 <div class="folder-item ${isSublevel ? 'is-subfolder' : ''}" data-folder-id="${folder.id}" draggable="true">
                     <span class="folder-toggle">${hasChildren ? '<i class="fa-solid fa-chevron-right"></i>' : ''}</span>
-                    <i class="fa-solid fa-folder"></i> 
-                    <span class="folder-name">${folder.nombre}</span>
+                    <i class="fa-solid fa-folder"></i>
+                    <span class="folder-name">${escapeHtml(folder.nombre)}</span>
                     <span class="folder-count">(${count})</span>
                     <div class="folder-item-actions">
                         <button class="btn-icon" data-action="edit-folder"><i class="fa-solid fa-pencil"></i></button>
@@ -274,20 +278,20 @@ let draggedItemId = null;
 function handleDragStart(e) {
     e.stopPropagation();
     const target = e.currentTarget;
-    
+
     if (target.matches('.folder-item')) {
         draggedItemId = target.dataset.folderId;
         e.dataTransfer.setData('text/plain', `folder:${draggedItemId}`);
     } else if (target.matches('tr[data-id]')) {
         const candidateId = target.dataset.id;
         const selectedIds = getSelectedIds();
-        
+
         const idsToDrag = selectedIds.includes(candidateId) ? selectedIds : [candidateId];
-        
+
         draggedItemId = idsToDrag;
         e.dataTransfer.setData('text/plain', `candidate:${idsToDrag.join(',')}`);
     }
-    
+
     e.dataTransfer.effectAllowed = 'move';
     target.classList.add('dragging');
 }
@@ -317,7 +321,7 @@ async function handleDrop(e) {
     if (!data || !targetFolderId) return;
 
     const [type, ids] = data.split(':');
-    
+
     if (type === 'folder') {
         const draggedFolderId = ids;
         if (draggedFolderId && targetFolderId !== draggedFolderId) {
@@ -332,9 +336,9 @@ async function handleDrop(e) {
     } else if (type === 'candidate') {
         const candidateIds = ids.split(',');
         const newFolderId = targetFolderId === 'none' || targetFolderId === 'all' ? null : parseInt(targetFolderId, 10);
-        
+
         if (candidateIds.length > 0) {
-            const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: newFolderId }).in('id', candidateIds);
+            const error = await actualizarEnLotes(candidateIds, { carpeta_id: newFolderId });
             if (error) {
                 alert(`Error al mover ${candidateIds.length > 1 ? 'los candidatos' : 'el candidato'}.`);
             } else {
@@ -405,32 +409,15 @@ function handleFolderClick(id, name, element) {
     if (element) {
         element.classList.add('active');
     }
-    
-    talentosListBody.innerHTML = '';
+
     loadCandidates();
 }
 
 
 // --- LÓGICA DE CANDIDATOS ---
-async function loadCandidates(append = false) {
-    if (!append) {
-        currentOffset = 0;
-        talentosListBody.innerHTML = `<tr><td colspan="6" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
-    } else {
-        const loadMoreBtn = document.getElementById('load-more-btn');
-        if (loadMoreBtn) { loadMoreBtn.disabled = true; loadMoreBtn.textContent = 'Cargando...'; }
-    }
 
-    let query = supabase
-        .from('v2_candidatos')
-        .select(`
-            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
-            v2_carpetas(nombre),
-            v2_notas_historial(count),
-            v2_postulaciones(id, estado_postulacion, v2_avisos(titulo, user_id))
-        `, { count: 'exact' });
-
-    // Aplicar filtros
+/** Aplica los filtros actuales (carpeta, aviso, búsqueda, estado, leído) a una consulta. */
+function aplicarFiltros(query) {
     if (currentFolderId === 'none') {
         query = query.is('carpeta_id', null);
     } else if (currentFolderId !== 'all') {
@@ -438,17 +425,16 @@ async function loadCandidates(append = false) {
     }
 
     if (currentAvisoId !== 'all') {
-        query = query.select(`
-            id, nombre_candidato, email, telefono, ubicacion, nombre_archivo_general, estado, read, created_at,
-            v2_carpetas(nombre),
-            v2_notas_historial(count),
-            v2_postulaciones!inner(id, aviso_id, estado_postulacion, v2_avisos(titulo))
-        `).eq('v2_postulaciones.aviso_id', currentAvisoId);
+        query = query.eq('v2_postulaciones.aviso_id', currentAvisoId);
     }
 
     if (currentSearchTerm) {
-        const searchTerm = `%${currentSearchTerm}%`;
-        query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
+        // Sin comas ni paréntesis: romperían el filtro `or` de la API.
+        const limpio = currentSearchTerm.replace(/[,()]/g, ' ').trim();
+        if (limpio) {
+            const searchTerm = `%${limpio}%`;
+            query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
+        }
     }
 
     if (currentStatusFilter !== 'all') {
@@ -460,16 +446,41 @@ async function loadCandidates(append = false) {
     }
 
     if (currentReadFilter !== 'all') {
-        const isRead = currentReadFilter === 'leido';
-        query = query.eq('read', isRead);
+        query = query.eq('read', currentReadFilter === 'leido');
+    }
+    return query;
+}
+
+async function loadCandidates(append = false) {
+    const estaConsulta = ++consultaActual;
+    if (!append) {
+        currentOffset = 0;
+        talentosListBody.innerHTML = `<tr><td colspan="6" style="text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando...</td></tr>`;
+    } else {
+        const loadMoreBtn = document.getElementById('load-more-btn');
+        if (loadMoreBtn) { loadMoreBtn.disabled = true; loadMoreBtn.textContent = 'Cargando...'; }
     }
 
-    // Aplicar orden
-    query = query.order(currentSort.column, { ascending: currentSort.ascending });
+    const postulacionesSelect = currentAvisoId !== 'all'
+        ? 'v2_postulaciones!inner(id, aviso_id, v2_avisos(titulo))'
+        : 'v2_postulaciones(id, v2_avisos(titulo))';
 
-    query = query.range(currentOffset, currentOffset + PAGE_SIZE - 1);
+    let query = supabase
+        .from('v2_candidatos')
+        .select(`
+            id, nombre_candidato, email, telefono, nombre_archivo_general, estado, read, created_at,
+            v2_carpetas(nombre),
+            v2_notas_historial(count),
+            ${postulacionesSelect}
+        `, { count: 'exact' });
+
+    query = aplicarFiltros(query)
+        .order(currentSort.column, { ascending: currentSort.ascending })
+        .order('id', { ascending: false })
+        .range(currentOffset, currentOffset + PAGE_SIZE - 1);
 
     const { data, error, count } = await query;
+    if (estaConsulta !== consultaActual) return; // llegó tarde: hay una consulta más nueva
 
     if (error) {
         console.error("Error al cargar candidatos:", error);
@@ -505,6 +516,7 @@ function renderTable(candidatos, append = false) {
         return;
     }
 
+    const filas = document.createDocumentFragment();
     candidatos.forEach(candidato => {
         const row = document.createElement('tr');
         row.dataset.id = candidato.id;
@@ -516,42 +528,34 @@ function renderTable(candidatos, append = false) {
 
         const estadoClass = getEstadoClass(candidato.estado);
         const tieneNotas = candidato.v2_notas_historial && candidato.v2_notas_historial.length > 0 && candidato.v2_notas_historial[0].count > 0;
-        const estadoActual = candidato.estado || '';
         const telWA = (candidato.telefono || '').replace(/\D/g, '');
-        const waBtnBT = telWA ? `<a href="https://wa.me/${telWA}" target="wa_window" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="WhatsApp" style="display:inline-flex;align-items:center;" onclick="event.stopPropagation()"><i class="fa-brands fa-whatsapp" style="color:#25d366;font-size:1rem;"></i></a>` : '';
+        const waBtnBT = telWA ? `<a href="https://wa.me/${telWA}" target="wa_window" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="WhatsApp" style="display:inline-flex;align-items:center;"><i class="fa-brands fa-whatsapp" style="color:#25d366;font-size:1rem;"></i></a>` : '';
 
-        // Avisos en que participó + estado pipeline por aviso
-        // Solo mostrar avisos como pills (sin select, el estado va en la columna acciones)
-        
-        const isAdmin = ADMIN_EMAILS.includes(globalUserEmail);
-        let postulaciones = (candidato.v2_postulaciones || []).filter(p => p.v2_avisos?.titulo);
-        
-        if (!isAdmin) {
-            // Si NO es admin de todo el sistema, ocultar los avisos en los que no es el creador
-            postulaciones = postulaciones.filter(p => p.v2_avisos.user_id === globalUserId);
-        }
-
+        // Avisos en los que participó
+        const postulaciones = (candidato.v2_postulaciones || []).filter(p => p.v2_avisos?.titulo);
         const avisosHTML = postulaciones.length
             ? `<div class="candidate-avisos">${postulaciones.map(p =>
-                `<span class="aviso-pill" title="${p.v2_avisos.titulo}">${p.v2_avisos.titulo}</span>`
+                `<span class="aviso-pill" title="${escapeHtml(p.v2_avisos.titulo)}">${escapeHtml(p.v2_avisos.titulo)}</span>`
               ).join('')}</div>`
             : '';
+
+        const ep = candidato.estado || 'sin_revisar';
 
         row.innerHTML = `
             <td><input type="checkbox" class="candidate-checkbox" data-id="${candidato.id}"></td>
             <td>
                 <div class="candidate-name-container">
-                    <span class="candidate-name ${estadoClass}">${candidato.nombre_candidato || 'No extraído'}</span>
+                    <span class="candidate-name ${estadoClass}">${escapeHtml(candidato.nombre_candidato || 'No extraído')}</span>
                     ${tieneNotas ? '<i class="fa-solid fa-note-sticky has-notes-icon" title="Tiene notas"></i>' : ''}
                 </div>
-                <div class="candidate-filename">${candidato.nombre_archivo_general || 'No Identificado'}</div>
+                <div class="candidate-filename">${escapeHtml(candidato.nombre_archivo_general || 'No Identificado')}</div>
                 ${avisosHTML}
             </td>
-            <td>${candidato.v2_carpetas?.nombre || '<em>Sin Carpeta</em>'}</td>
+            <td>${candidato.v2_carpetas?.nombre ? escapeHtml(candidato.v2_carpetas.nombre) : '<em>Sin Carpeta</em>'}</td>
             <td>
-                <div style="white-space: normal; overflow: hidden; text-overflow: ellipsis;">${candidato.email || ''}</div>
+                <div style="white-space: normal; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(candidato.email || '')}</div>
                 <div style="display:flex; align-items:center; gap:0.3rem; flex-wrap:nowrap;">
-                    <span class="text-light" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${candidato.telefono || ''}</span>
+                    <span class="text-light" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(candidato.telefono || '')}</span>
                     ${waBtnBT}
                 </div>
             </td>
@@ -559,57 +563,18 @@ function renderTable(candidatos, append = false) {
                 ${formatRelativeDate(candidato.created_at)}
             </td>
             <td class="actions-cell" style="text-align: right; white-space: nowrap;">
-                ${(() => {
-                    const ep = estadoActual || 'sin_revisar';
-                    const cls = { en_proceso:'ps-en-proceso', entrevistado:'ps-entrevistado', contactado:'ps-contactado', descartado:'ps-descartado', prohibido:'ps-prohibido', contratado:'ps-contratado' }[ep] || '';
-                    return `<select class="pipeline-select ${cls}" data-action="set-global-estado" style="max-width:130px;">
-                        <option value="sin_revisar"  ${ep==='sin_revisar'  ?'selected':''}>Sin estado</option>
-                        <option value="en_proceso"   ${ep==='en_proceso'   ?'selected':''}>En proceso</option>
-                        <option value="entrevistado" ${ep==='entrevistado' ?'selected':''}>Entrevistado</option>
-                        <option value="contactado"   ${ep==='contactado'   ?'selected':''}>Contactado</option>
-                        <option value="descartado"   ${ep==='descartado'   ?'selected':''}>Descartado</option>
-                        <option value="prohibido"    ${ep==='prohibido'    ?'selected':''}>Prohibido</option>
-                        <option value="contratado"   ${ep==='contratado'   ?'selected':''}>Contratado</option>
-                    </select>`;
-                })()}
+                <select class="pipeline-select ${CLASES_PIPELINE[ep] || ''}" data-action="set-global-estado" style="max-width:130px;">
+                    ${ESTADOS_PIPELINE.map(([valor, texto]) => `<option value="${valor}" ${ep === valor ? 'selected' : ''}>${texto}</option>`).join('')}
+                </select>
                 <button class="btn btn-secondary btn-sm" data-action="toggle-actions" title="Más acciones" style="margin-left:0.4rem;">
                     <i class="fa-solid fa-chevron-down"></i>
                 </button>
             </td>
         `;
         addTableRowListeners(row);
-        // Select de estado global del candidato
-        const globalEstadoSel = row.querySelector('[data-action="set-global-estado"]');
-        if (globalEstadoSel) {
-            globalEstadoSel.addEventListener('change', async (e) => {
-                e.stopPropagation();
-                const nuevoEstado = globalEstadoSel.value;
-                const cls = { en_proceso:'ps-en-proceso', entrevistado:'ps-entrevistado', contactado:'ps-contactado', descartado:'ps-descartado', prohibido:'ps-prohibido', contratado:'ps-contratado' };
-                globalEstadoSel.className = `pipeline-select ${cls[nuevoEstado] || ''}`.trim();
-                row.dataset.estado = nuevoEstado;
-                const valorDB = nuevoEstado === 'sin_revisar' ? null : nuevoEstado;
-                await supabase.from('v2_candidatos').update({ estado: valorDB }).eq('id', candidato.id);
-            });
-        }
-        // Pipeline selects por aviso
-        row.querySelectorAll('.pipeline-select[data-postulacion-id]').forEach(sel => {
-            sel.addEventListener('change', async (e) => {
-                e.stopPropagation();
-                const nuevoEstado = sel.value;
-                const postulacionId = sel.dataset.postulacionId;
-                const candidatoIdSel = sel.dataset.candidatoId;
-                const cls = { en_proceso: 'ps-en-proceso', entrevistado: 'ps-entrevistado', descartado: 'ps-descartado', contratado: 'ps-contratado' };
-                sel.className = `pipeline-select ${cls[nuevoEstado] || ''}`.trim();
-                await supabase.from('v2_postulaciones').update({ estado_postulacion: nuevoEstado }).eq('id', postulacionId);
-                // Sincronizar con v2_candidatos
-                const estadoMap = { contratado: 'contratado', en_proceso: 'contactado', entrevistado: 'contactado' };
-                if (estadoMap[nuevoEstado] && candidatoIdSel) {
-                    await supabase.from('v2_candidatos').update({ estado: estadoMap[nuevoEstado] }).eq('id', candidatoIdSel);
-                }
-            });
-        });
-        talentosListBody.appendChild(row);
+        filas.appendChild(row);
     });
+    talentosListBody.appendChild(filas);
 }
 
 
@@ -617,29 +582,46 @@ function addTableRowListeners(row) {
     row.draggable = true;
     row.addEventListener('dragstart', handleDragStart);
     row.addEventListener('dragend', handleDragEnd);
+}
 
-    row.addEventListener('click', (e) => {
-        if (e.target.closest('button, a, input')) return;
-        const checkbox = row.querySelector('.candidate-checkbox');
-        if (checkbox) {
-            checkbox.checked = !checkbox.checked;
-            updateBulkActionsVisibility();
-        }
-    });
-
-    row.querySelector('.candidate-checkbox')?.addEventListener('change', updateBulkActionsVisibility);
-    row.querySelector('[data-action="toggle-actions"]')?.addEventListener('click', (e) => {
+// Un solo listener para todas las filas de la tabla
+talentosListBody.addEventListener('click', (e) => {
+    const row = e.target.closest('tr[data-id]');
+    if (!row) return;
+    if (e.target.closest('[data-action="toggle-actions"]')) {
         e.stopPropagation();
         toggleActionRow(row);
-    });
-    // quick-status buttons eliminados — reemplazados por pipeline-select global
-}
+        return;
+    }
+    if (e.target.closest('button, a, input, select')) return;
+    const checkbox = row.querySelector('.candidate-checkbox');
+    if (checkbox) {
+        checkbox.checked = !checkbox.checked;
+        updateBulkActionsVisibility();
+    }
+});
+
+talentosListBody.addEventListener('change', async (e) => {
+    if (e.target.matches('.candidate-checkbox')) {
+        updateBulkActionsVisibility();
+        return;
+    }
+    if (e.target.matches('[data-action="set-global-estado"]')) {
+        const row = e.target.closest('tr[data-id]');
+        const nuevoEstado = e.target.value;
+        e.target.className = `pipeline-select ${CLASES_PIPELINE[nuevoEstado] || ''}`.trim();
+        row.dataset.estado = nuevoEstado;
+        const valorDB = nuevoEstado === 'sin_revisar' ? null : nuevoEstado;
+        const { error } = await supabase.from('v2_candidatos').update({ estado: valorDB }).eq('id', row.dataset.id);
+        if (error) alert('No se pudo guardar el estado.');
+    }
+});
 
 function toggleActionRow(row) {
     const existingActionRow = document.getElementById(`actions-${row.dataset.id}`);
     const candidateStatus = row.dataset.estado;
     const isRead = row.classList.contains('read');
-    
+
     document.querySelectorAll('.actions-row').forEach(r => {
         if (r.id !== `actions-${row.dataset.id}`) {
             r.remove();
@@ -733,22 +715,14 @@ async function openHistorialModal(candidateId, nombre) {
     historialBody.innerHTML = '<p style="padding:1rem;"><i class="fa-solid fa-spinner fa-spin"></i> Cargando historial...</p>';
     showModal('historial-modal-container');
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const isAdmin = session && ADMIN_EMAILS.includes(session.user.email);
-
     const { data, error } = await supabase
         .from('v2_postulaciones')
-        .select('calificacion, estado_postulacion, created_at, v2_avisos(titulo, user_id)')
+        .select('calificacion, estado_postulacion, created_at, v2_avisos(titulo)')
         .eq('candidato_id', candidateId)
         .order('created_at', { ascending: false });
 
-    // Filtrar los datos en la memoria si no es admin, para que no vea avisos de otros tableros
-    const filteredData = (!isAdmin) 
-        ? (data || []).filter(p => p.v2_avisos?.user_id === session?.user?.id) 
-        : data;
-
-    if (error || !filteredData?.length) {
-        historialBody.innerHTML = '<p style="padding:1rem; color:var(--text-light);">No se encontraron postulaciones accesibles para este candidato.</p>';
+    if (error || !data?.length) {
+        historialBody.innerHTML = '<p style="padding:1rem; color:var(--text-light);">No se encontraron postulaciones para este candidato.</p>';
         return;
     }
 
@@ -764,14 +738,14 @@ async function openHistorialModal(candidateId, nombre) {
                 </tr>
             </thead>
             <tbody>
-                ${filteredData.map(p => {
+                ${data.map(p => {
                     const s = p.calificacion;
                     const sc = typeof s === 'number' && s >= 0 ? s : null;
                     return `
                         <tr>
-                            <td>${p.v2_avisos?.titulo || '<em>N/A</em>'}</td>
+                            <td>${p.v2_avisos?.titulo ? escapeHtml(p.v2_avisos.titulo) : '<em>N/A</em>'}</td>
                             <td style="text-align:center; font-weight:700; color:${sc !== null ? scoreColor(sc) : 'var(--text-light)'};">${sc !== null ? sc + '/100' : '—'}</td>
-                            <td style="font-size:0.8rem;">${p.estado_postulacion || 'sin_revisar'}</td>
+                            <td style="font-size:0.8rem;">${escapeHtml(p.estado_postulacion || 'sin_revisar')}</td>
                             <td style="font-size:0.78rem; color:var(--text-light); white-space:nowrap;">${p.created_at ? new Date(p.created_at).toLocaleDateString('es-AR') : '—'}</td>
                         </tr>
                     `;
@@ -792,7 +766,7 @@ function getSelectedIds() {
 function updateBulkActionsVisibility() {
     const selectedCount = getSelectedIds().length;
     bulkActionsContainer.classList.toggle('hidden', selectedCount === 0);
-    
+
     if (selectionCount) {
         selectionCount.textContent = `${selectedCount} seleccionados`;
     }
@@ -800,16 +774,14 @@ function updateBulkActionsVisibility() {
     const selectAllContainer = document.getElementById('select-all-matching-container');
     const selectAllPageMessage = document.getElementById('select-all-page-message');
     const selectAllMatchingBtn = document.getElementById('select-all-matching-btn');
+    const displayedCount = talentosListBody.querySelectorAll('.candidate-checkbox').length;
 
-    const isPageFullySelected = talentosListBody.querySelectorAll('.candidate-checkbox:checked').length === talentosListBody.querySelectorAll('.candidate-checkbox').length && talentosListBody.querySelectorAll('.candidate-checkbox').length > 0;
-
-    if (selectAllCheckbox.checked && totalCandidates > talentosListBody.children.length) {
+    if (selectAllCheckbox.checked && totalCandidates > displayedCount) {
         selectAllContainer.classList.remove('hidden');
         if (isSelectAllMatchingActive) {
             selectAllPageMessage.textContent = `Todos los ${allMatchingIds.length} candidatos que coinciden están seleccionados.`;
             selectAllMatchingBtn.classList.add('hidden');
         } else {
-            const displayedCount = talentosListBody.querySelectorAll('.candidate-checkbox').length;
             selectAllPageMessage.textContent = `Se han seleccionado los ${displayedCount} candidatos de esta página.`;
             selectAllMatchingBtn.classList.remove('hidden');
         }
@@ -826,43 +798,29 @@ function handleSelectAll(e) {
 }
 
 async function selectAllMatching() {
-    let query = supabase.from('v2_candidatos').select('id');
-
-    if (currentFolderId === 'none') query = query.is('carpeta_id', null);
-    else if (currentFolderId !== 'all') query = query.eq('carpeta_id', currentFolderId);
-
-    if (currentAvisoId !== 'all') {
-        query = query.select('id, v2_postulaciones!inner(aviso_id)').eq('v2_postulaciones.aviso_id', currentAvisoId);
-    }
-
-    if (currentSearchTerm) {
-        const searchTerm = `%${currentSearchTerm}%`;
-        query = query.or(`nombre_candidato.ilike.${searchTerm},email.ilike.${searchTerm},telefono.ilike.${searchTerm}`);
-    }
-    
-    if (currentStatusFilter !== 'all') {
-        if (currentStatusFilter === 'sin_estado') {
-            query = query.is('estado', null);
-        } else {
-            query = query.eq('estado', currentStatusFilter);
-        }
-    }
-
-    if (currentReadFilter !== 'all') {
-        const isRead = currentReadFilter === 'leido';
-        query = query.eq('read', isRead);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
+    const btn = document.getElementById('select-all-matching-btn');
+    btn.disabled = true;
+    try {
+        const select = currentAvisoId !== 'all' ? 'id, v2_postulaciones!inner(aviso_id)' : 'id';
+        const data = await traerTodas(() => aplicarFiltros(supabase.from('v2_candidatos').select(select)).order('id'));
+        allMatchingIds = data.map(c => c.id.toString());
+        isSelectAllMatchingActive = true;
+        updateBulkActionsVisibility();
+    } catch (error) {
+        console.error(error);
         alert("Error al seleccionar todos los candidatos.");
-        return;
+    } finally {
+        btn.disabled = false;
     }
+}
 
-    allMatchingIds = data.map(c => c.id.toString());
-    isSelectAllMatchingActive = true;
-    updateBulkActionsVisibility();
+/** Actualiza candidatos por lotes y devuelve el primer error (o null). */
+async function actualizarEnLotes(ids, cambios) {
+    for (const lote of enLotes(ids)) {
+        const { error } = await supabase.from('v2_candidatos').update(cambios).in('id', lote);
+        if (error) return error;
+    }
+    return null;
 }
 
 async function handleBulkMove() {
@@ -870,11 +828,11 @@ async function handleBulkMove() {
     const targetFolderId = moveToFolderSelect.value === 'none' ? null : parseInt(moveToFolderSelect.value, 10);
     if (ids.length === 0 || moveToFolderSelect.value === "") return;
 
-    const { error } = await supabase.from('v2_candidatos').update({ carpeta_id: targetFolderId }).in('id', ids);
-    if (error) { 
-        alert("Error al mover."); 
-    } else { 
-        alert("Movidos con éxito."); 
+    const error = await actualizarEnLotes(ids, { carpeta_id: targetFolderId });
+    if (error) {
+        alert("Error al mover.");
+    } else {
+        alert("Movidos con éxito.");
         isSelectAllMatchingActive = false;
         selectAllCheckbox.checked = false;
         await Promise.all([loadCandidates(), loadFolders()]);
@@ -885,15 +843,19 @@ async function handleBulkDelete() {
     const ids = getSelectedIds();
     if (ids.length === 0) return;
     if (confirm(`¿Eliminar ${ids.length} candidato(s) de forma PERMANENTE?`)) {
-        const { error } = await supabase.from('v2_candidatos').delete().in('id', ids);
-        if (error) { 
-            alert("Error al eliminar."); 
-        } else { 
-            alert("Eliminados con éxito."); 
-            isSelectAllMatchingActive = false;
-            selectAllCheckbox.checked = false;
-            await Promise.all([loadCandidates(), loadFolders()]);
+        let error = null;
+        for (const lote of enLotes(ids)) {
+            ({ error } = await supabase.from('v2_candidatos').delete().in('id', lote));
+            if (error) break;
         }
+        if (error) {
+            alert("Error al eliminar.");
+        } else {
+            alert("Eliminados con éxito.");
+        }
+        isSelectAllMatchingActive = false;
+        selectAllCheckbox.checked = false;
+        await Promise.all([loadCandidates(), loadFolders()]);
     }
 }
 
@@ -903,15 +865,12 @@ async function createNewFolder() {
     const name = newFolderNameInput.value.trim(); if (!name) return;
     const parentId = parentFolderSelect.value ? parseInt(parentFolderSelect.value, 10) : null;
     const { error } = await supabase.from('v2_carpetas').insert({ nombre: name, parent_id: parentId });
-    if (error) { alert("Error al crear la carpeta."); } else { toggleAddFolderForm(false); await loadFolders(); }
+    if (error) { alert("Error al crear la carpeta."); } else { newFolderNameInput.value = ''; toggleAddFolderForm(false); await loadFolders(); }
 }
 
 function populateFolderSelects() {
     const currentParentValue = parentFolderSelect.value;
     const currentMoveToValue = moveToFolderSelect.value;
-
-    parentFolderSelect.innerHTML = '<option value="">Raíz</option>';
-    moveToFolderSelect.innerHTML = '<option value="" disabled selected>Mover a...</option><option value="none">— Sin carpeta</option>';
 
     // Build hierarchy tree
     const byId = new Map(carpetasCache.map(f => [f.id, { ...f, children: [] }]));
@@ -921,17 +880,18 @@ function populateFolderSelects() {
         else roots.push(byId.get(f.id));
     });
 
+    let opciones = '';
     const addOptions = (folders, depth = 0) => {
         const prefix = depth === 0 ? '' : ('　'.repeat(depth - 1) + '└ ');
         folders.forEach(f => {
-            const label = prefix + f.nombre;
-            const opt = `<option value="${f.id}">${label}</option>`;
-            parentFolderSelect.innerHTML += opt;
-            moveToFolderSelect.innerHTML += opt;
+            opciones += `<option value="${f.id}">${escapeHtml(prefix + f.nombre)}</option>`;
             if (f.children.length) addOptions(f.children, depth + 1);
         });
     };
     addOptions(roots);
+
+    parentFolderSelect.innerHTML = '<option value="">Raíz</option>' + opciones;
+    moveToFolderSelect.innerHTML = '<option value="" disabled selected>Mover a...</option><option value="none">— Sin carpeta</option>' + opciones;
 
     parentFolderSelect.value = currentParentValue;
     moveToFolderSelect.value = currentMoveToValue;
@@ -942,14 +902,9 @@ async function openCvPdf(id, buttonElement) {
     buttonElement.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i>`;
     buttonElement.disabled = true;
     try {
-        const { data, error } = await supabase.from('v2_candidatos').select('base64_general, nombre_archivo_general').eq('id', id).single();
-        if (error || !data) throw error;
-        const link = document.createElement('a');
-        link.href = data.base64_general;
-        link.download = data.nombre_archivo_general || 'cv.pdf';
-        link.click();
+        await descargarCvCandidato(id);
     } catch (error) {
-        alert('No se pudo cargar el CV.');
+        alert(`No se pudo cargar el CV: ${error.message}`);
     } finally {
         buttonElement.innerHTML = originalHTML;
         buttonElement.disabled = false;
@@ -972,7 +927,7 @@ async function openTextModal(id) {
         textModalBody.textContent = 'No se pudo cargar el texto del CV.';
         return;
     }
-    
+
     textModalTitle.textContent = `Texto de: ${data.nombre_candidato}`;
     textModalBody.textContent = data.texto_cv_general || 'No hay texto extraído.';
 }
@@ -980,6 +935,7 @@ async function openTextModal(id) {
 async function openEditModal(id) {
     editCandidateIdInput.value = id;
     editForm.reset();
+    editCandidateIdInput.value = id;
     showModal('edit-modal-container');
 
     const { data, error } = await supabase
@@ -1000,15 +956,11 @@ async function openEditModal(id) {
 }
 
 async function loadAvisos() {
-    let query = supabase
+    // Todos los miembros ven todos los avisos en el filtro.
+    const { data, error } = await supabase
         .from('v2_avisos')
         .select('id, titulo')
         .order('created_at', { ascending: false });
-
-    // Todos los usuarios pueden ver todos los avisos en el filtro,
-    // para poder buscar candidatos aunque no hayan creado avisos propios todavía.
-
-    const { data, error } = await query;
 
     if (error) { console.error("Error al cargar avisos:", error); return; }
 
@@ -1030,7 +982,12 @@ async function handleEditFormSubmit(e) {
         telefono: editTelefonoInput.value,
     };
     const { error } = await supabase.from('v2_candidatos').update(updatedData).eq('id', id);
-    if (error) { alert("Error al actualizar."); } else { hideModal('edit-modal-container'); loadCandidates(); }
+    if (error) {
+        alert(error.code === '23505' ? "Ya existe otro candidato con ese nombre." : "Error al actualizar.");
+    } else {
+        hideModal('edit-modal-container');
+        loadCandidates();
+    }
 }
 
 async function openNotesModal(id) {
@@ -1055,7 +1012,7 @@ async function openNotesModal(id) {
     } else {
         notesHistoryContainer.innerHTML = data.map(nota => `
             <div class="note-history-item">
-                <p>${nota.nota}</p>
+                <p>${escapeHtml(nota.nota)}</p>
                 <small>${new Date(nota.created_at).toLocaleString()}</small>
             </div>
         `).join('');
@@ -1085,37 +1042,23 @@ async function handleNotesFormSubmit(e) {
     }
 }
 
-async function exportarCSV() {
+async function exportarExcel() {
     const btn = document.getElementById('export-csv-btn');
     const originalHTML = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
 
     try {
-        // Fetch ALL matching candidates from DB (no pagination)
-        let query = supabase
-            .from('v2_candidatos')
-            .select('nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre)')
-            .order(currentSort.column, { ascending: currentSort.ascending });
-
-        if (currentFolderId === 'none') query = query.is('carpeta_id', null);
-        else if (currentFolderId !== 'all') query = query.eq('carpeta_id', currentFolderId);
-
-        if (currentAvisoId !== 'all') {
-            query = query.select('nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre), v2_postulaciones!inner(aviso_id)')
-                .eq('v2_postulaciones.aviso_id', currentAvisoId);
-        }
-        if (currentSearchTerm) {
-            const t = `%${currentSearchTerm}%`;
-            query = query.or(`nombre_candidato.ilike.${t},email.ilike.${t},telefono.ilike.${t}`);
-        }
-        if (currentStatusFilter !== 'all') {
-            currentStatusFilter === 'sin_estado' ? query = query.is('estado', null) : query = query.eq('estado', currentStatusFilter);
-        }
-        if (currentReadFilter !== 'all') query = query.eq('read', currentReadFilter === 'leido');
-
-        const { data, error } = await query;
-        if (error) throw error;
+        // Todos los candidatos que coinciden con los filtros (paginando de a 1000)
+        const select = currentAvisoId !== 'all'
+            ? 'id, nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre), v2_postulaciones!inner(aviso_id)'
+            : 'id, nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre)';
+        const [data, ExcelJS] = await Promise.all([
+            traerTodas(() => aplicarFiltros(supabase.from('v2_candidatos').select(select))
+                .order(currentSort.column, { ascending: currentSort.ascending })
+                .order('id', { ascending: false })),
+            cargarExcelJS(),
+        ]);
 
         const wb = new ExcelJS.Workbook();
         wb.creator = 'Selecta CV';
@@ -1198,7 +1141,7 @@ async function updateCandidateStatus(id, estado) {
             row.dataset.estado = estado || 'normal';
             const nameSpan = row.querySelector('.candidate-name');
             nameSpan.className = `candidate-name ${getEstadoClass(estado)}`;
-            
+
             const actionRow = document.getElementById(`actions-${id}`);
             if(actionRow) actionRow.remove();
         }

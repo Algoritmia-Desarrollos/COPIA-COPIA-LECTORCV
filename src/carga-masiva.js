@@ -1,7 +1,8 @@
 // src/carga-masiva.js
 
 import { supabase } from './supabaseClient.js';
-import { toTitleCase, extractTextFromFile } from './utils.js'; // Importamos las funciones de formato y extracción
+import { llamarFuncion } from './api.js';
+import { extractTextFromFile, fileToBase64, escapeHtml, copiarAlPortapapeles } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const fileInput = document.getElementById('file-input-masivo');
@@ -23,28 +24,27 @@ let isProcessing = false;
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
-    await loadFoldersIntoSelect();
     setupPublicLink();
 
     // Listeners de eventos
     fileInput.addEventListener('change', handleFileSelection);
     processQueueBtn.addEventListener('click', processQueue);
     clearQueueBtn.addEventListener('click', clearFinishedItems);
+
+    await loadFoldersIntoSelect();
 });
 
 /**
  * Carga las carpetas del usuario en el selector.
  */
 async function loadFoldersIntoSelect() {
-    const { data: folders, error } = await supabase.from('v2_carpetas').select('*').order('nombre');
+    const { data: folders, error } = await supabase.from('v2_carpetas').select('id, nombre').order('nombre');
     if (error) {
         console.error("Error cargando carpetas", error);
         return;
     }
-    folderSelect.innerHTML = '<option value="">Sin carpeta</option>';
-    folders.forEach(folder => {
-        folderSelect.innerHTML += `<option value="${folder.id}">${folder.nombre}</option>`;
-    });
+    folderSelect.innerHTML = '<option value="">Sin carpeta</option>' +
+        folders.map(folder => `<option value="${folder.id}">${escapeHtml(folder.nombre)}</option>`).join('');
 }
 
 /**
@@ -58,9 +58,8 @@ function setupPublicLink() {
 
     new QRious({ element: qrCanvas, value: link, size: 120 });
 
-    copiarLinkBtn.addEventListener('click', () => {
-        linkPublicoInput.select();
-        document.execCommand('copy');
+    copiarLinkBtn.addEventListener('click', async () => {
+        await copiarAlPortapapeles(link, linkPublicoInput);
         copiarLinkBtn.innerHTML = `<i class="fa-solid fa-check"></i>`;
         setTimeout(() => { copiarLinkBtn.innerHTML = `<i class="fa-solid fa-copy"></i>`; }, 2000);
     });
@@ -120,8 +119,8 @@ function renderQueue() {
             li.innerHTML = `
                 <div class="status-icon"><i class="fa-fw ${statusInfo.icon}"></i></div>
                 <div class="file-details">
-                    <span class="file-name">${item.file.name}</span>
-                    ${item.error ? `<span class="error-message">${item.error}</span>` : ''}
+                    <span class="file-name">${escapeHtml(item.file.name)}</span>
+                    ${item.error ? `<span class="error-message">${escapeHtml(item.error)}</span>` : ''}
                 </div>
                 <span class="status-badge">${statusInfo.text}</span>
             `;
@@ -140,7 +139,7 @@ function updateQueueItemUI(id, status, errorMsg = null) {
 
     const statusInfo = getStatusInfo(status);
     li.className = `queue-item status-${status}`;
-    
+
     const iconEl = li.querySelector('.status-icon i');
     if (iconEl) {
         iconEl.className = `fa-fw ${statusInfo.icon}`;
@@ -177,95 +176,39 @@ async function processQueue() {
     renderQueue();
 
     const itemsToProcess = fileQueue.filter(item => item.status === 'pendiente');
-    const CONCURRENCY_LIMIT = 3;
+    const selectedFolderId = folderSelect.value ? parseInt(folderSelect.value, 10) : null;
+    const CONCURRENCY_LIMIT = 4;
+    let siguiente = 0;
 
-    for (let i = 0; i < itemsToProcess.length; i += CONCURRENCY_LIMIT) {
-        const batch = itemsToProcess.slice(i, i + CONCURRENCY_LIMIT);
-        
-        const promises = batch.map(async (item) => {
+    const procesarSiguiente = async () => {
+        while (siguiente < itemsToProcess.length) {
+            const item = itemsToProcess[siguiente++];
             try {
                 item.status = 'procesando';
                 updateQueueItemUI(item.id, 'procesando');
-                
+
                 const textoCV = await extractTextFromFile(item.file);
-                const iaData = await extraerDatosConIA(textoCV);
-                
                 const base64 = await fileToBase64(item.file);
-                const selectedFolderId = folderSelect.value ? parseInt(folderSelect.value, 10) : null;
-                await procesarCandidato(iaData, base64, textoCV, item.file.name, selectedFolderId);
+                await llamarFuncion('guardar-cv', {
+                    carpetaId: selectedFolderId,
+                    texto: textoCV,
+                    archivo: { nombre: item.file.name, tipo: item.file.type, base64 },
+                });
 
                 item.status = 'exito';
                 updateQueueItemUI(item.id, 'exito');
-
             } catch (error) {
                 console.error(`Fallo en ${item.file.name}:`, error);
                 item.status = 'error';
                 item.error = error.message;
                 updateQueueItemUI(item.id, 'error', error.message);
             }
-        });
+        }
+    };
 
-        await Promise.all(promises);
-    }
+    // Varios archivos a la vez: cuando uno termina, arranca el siguiente.
+    await Promise.all(Array.from({ length: CONCURRENCY_LIMIT }, procesarSiguiente));
 
     isProcessing = false;
     renderQueue();
-}
-
-/**
- * Lógica para crear o actualizar un candidato en la base de talentos.
- */
-async function procesarCandidato(iaData, base64, textoCV, nombreArchivo, carpetaId) {
-    let nombreFormateado = toTitleCase(iaData.nombreCompleto);
-    if (!nombreFormateado) {
-        nombreFormateado = `Candidato No Identificado ${Date.now()}`;
-    }
-
-    const { error } = await supabase
-        .from('v2_candidatos')
-        .upsert({
-            nombre_candidato: nombreFormateado,
-            email: iaData.email || `no-extraido-${Date.now()}@dominio.com`,
-            telefono: iaData.telefono,
-            base64_general: base64,
-            texto_cv_general: textoCV,
-            nombre_archivo_general: nombreArchivo,
-            carpeta_id: carpetaId,
-            updated_at: new Date()
-        }, {
-            onConflict: 'nombre_candidato' // Corregido para consistencia
-        });
-
-    if (error) throw new Error(`Error en base de datos: ${error.message}`);
-}
-
-
-// --- FUNCIONES AUXILIARES ---
-function fileToBase64(file) { return new Promise((res, rej) => { const r = new FileReader(); r.readAsDataURL(file); r.onload = () => res(r.result); r.onerror = e => rej(e); }); }
-async function extraerDatosConIA(texto) {
-    const textoLimpio = texto.replace(/\s+/g, ' ').trim();
-    const prompt = `
-Actúa como un asistente de extracción de datos altamente preciso. Tu única tarea es analizar el siguiente texto de un CV y extraer el nombre completo, la dirección de email y el número de teléfono.
-
-**Instrucciones Clave:**
-1.  **Nombre Completo:** Busca el nombre más prominente, usualmente ubicado al principio del documento.
-2.  **Email:** Busca un texto que siga el formato de un correo electrónico (ej: texto@dominio.com). Sé flexible con los espacios que puedan haberse colado (ej: texto @ dominio . com).
-3.  **Teléfono:** Busca secuencias de números que parezcan un número de teléfono. Pueden incluir prefijos (+54), paréntesis, guiones o espacios. Prioriza números de móvil si hay varios.
-
-**Texto del CV a Analizar:**
-"""
-${textoLimpio.substring(0, 4000)}
-"""
-
-**Formato de Salida Obligatorio:**
-Responde únicamente con un objeto JSON válido con las claves "nombreCompleto", "email" y "telefono". Si no puedes encontrar un dato de forma confiable, usa el valor \`null\`. No incluyas ninguna otra explicación o texto fuera del JSON.
-`;
-    try {
-        const { data, error } = await supabase.functions.invoke('openaiv2', { body: { query: prompt } });
-        if (error) throw error;
-        return JSON.parse(data.message);
-    } catch (e) {
-        console.error("Error al contactar o parsear la respuesta de la IA:", e);
-        return { nombreCompleto: null, email: null, telefono: null };
-    }
 }

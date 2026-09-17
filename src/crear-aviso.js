@@ -1,6 +1,8 @@
 // src/crear-aviso.js
 
 import { supabase } from './supabaseClient.js';
+import { llamarFuncion } from './api.js';
+import { escapeHtml } from './utils.js';
 
 // --- SELECTORES DE ELEMENTOS DEL DOM ---
 const avisoForm = document.getElementById('aviso-form');
@@ -31,7 +33,7 @@ function renderizarCondiciones(listaElemento, arrayDeCondiciones, tipo) {
         const item = document.createElement('div');
         item.className = 'condition-item'; // Usaremos una clase para darle estilo
         item.innerHTML = `
-            <span>${condicion}</span>
+            <span>${escapeHtml(condicion)}</span>
             <button type="button" class="remove-btn" data-index="${index}" data-tipo="${tipo}">&times;</button>
         `;
         listaElemento.appendChild(item);
@@ -60,7 +62,7 @@ document.addEventListener('click', (e) => {
     if (e.target.classList.contains('remove-btn')) {
         const index = parseInt(e.target.dataset.index, 10);
         const tipo = e.target.dataset.tipo;
-        
+
         if (tipo === 'necesaria') {
             condicionesNecesarias.splice(index, 1);
             renderizarCondiciones(necesariasList, condicionesNecesarias, 'necesaria');
@@ -82,19 +84,8 @@ generarDescripcionBtn.addEventListener('click', async () => {
     generarDescripcionBtn.disabled = true;
     generarDescripcionBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Generando...`;
 
-    const prompt = `
-      Actúa como un experto en RRHH. Crea el contenido para una búsqueda laboral con el título: "${puesto}".
-      Tu respuesta DEBE SER únicamente un objeto JSON con 3 claves: "descripcion" (un párrafo de 80-150 palabras), "condiciones_necesarias" (un array de 4 strings), y "condiciones_deseables" (un array de 3 strings).
-    `;
-
     try {
-        const { data, error } = await supabase.functions.invoke('openai', {
-            body: { query: prompt },
-        });
-
-        if (error) throw error;
-
-        const iaResult = JSON.parse(data.message);
+        const iaResult = await llamarFuncion('generar-aviso', { titulo: puesto });
 
         descripcionTextarea.value = iaResult.descripcion || '';
         condicionesNecesarias = iaResult.condiciones_necesarias || [];
@@ -105,7 +96,7 @@ generarDescripcionBtn.addEventListener('click', async () => {
 
     } catch (error) {
         console.error("Error al generar con IA:", error);
-        alert("Hubo un error al contactar con la IA. Por favor, inténtalo de nuevo.");
+        alert(`Hubo un error al contactar con la IA: ${error.message}`);
     } finally {
         generarDescripcionBtn.disabled = false;
         generarDescripcionBtn.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> Generar con IA`;
@@ -116,7 +107,7 @@ generarDescripcionBtn.addEventListener('click', async () => {
 avisoForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const submitButton = e.target.querySelector('button[type="submit"]');
-    
+
     successMessage.classList.add('hidden');
     errorMessage.classList.add('hidden');
 
@@ -130,10 +121,9 @@ avisoForm.addEventListener('submit', async (e) => {
         valido_hasta: document.getElementById('valido-hasta').value,
         condiciones_necesarias: condicionesNecesarias,
         condiciones_deseables: condicionesDeseables
-        // El user_id se asignará automáticamente gracias a la política de RLS y el valor por defecto en la DB.
+        // El user_id se asigna automáticamente con el valor por defecto de la base.
     };
 
-    // Insertamos en la nueva tabla v2_avisos
     const { error } = await supabase.from('v2_avisos').insert(nuevoAviso);
 
     if (error) {
@@ -141,14 +131,13 @@ avisoForm.addEventListener('submit', async (e) => {
         errorMessage.textContent = `Error al guardar: ${error.message}`;
         errorMessage.classList.remove('hidden');
         submitButton.disabled = false;
-        submitButton.textContent = 'Guardar y Publicar Aviso';
+        submitButton.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Guardar y Publicar Aviso';
         return;
     }
 
     successMessage.classList.remove('hidden');
-    
-    // Opcional: Limpiar el formulario y redirigir
+
     setTimeout(() => {
         window.location.href = 'lista-avisos.html'; // Redirigimos a la lista de búsquedas
-    }, 2000);
+    }, 1500);
 });

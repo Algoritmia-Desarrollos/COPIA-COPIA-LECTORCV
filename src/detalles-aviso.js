@@ -1,7 +1,8 @@
 // src/detalles-aviso.js
 
 import { supabase } from './supabaseClient.js';
-import { showModal, hideModal } from './utils.js';
+import { traerTodas, enLotes } from './api.js';
+import { showModal, hideModal, escapeHtml, copiarAlPortapapeles } from './utils.js';
 
 // --- SELECTORES DEL DOM ---
 const avisoTitulo = document.getElementById('aviso-titulo');
@@ -109,7 +110,7 @@ async function loadAvisoDetails(id, countFromUrl) {
         postulantesHeader.textContent = `Candidatos Postulados (Cargando... / ${maxCv})`;
         const { count, error } = await supabase
             .from('v2_postulaciones')
-            .select('*', { count: 'exact', head: true })
+            .select('id', { count: 'exact', head: true })
             .eq('aviso_id', id);
 
         if (error) {
@@ -128,7 +129,9 @@ function populateUI(aviso) {
     renderCondiciones(deseablesList, aviso.condiciones_deseables, 'No se especificaron condiciones deseables.');
     avisoIdSpan.textContent = aviso.id;
     avisoMaxCvSpan.textContent = aviso.max_cv || 'Ilimitados';
-    avisoValidoHastaSpan.textContent = new Date(aviso.valido_hasta).toLocaleDateString('es-AR', { timeZone: 'UTC' });
+    avisoValidoHastaSpan.textContent = aviso.valido_hasta
+        ? new Date(aviso.valido_hasta).toLocaleDateString('es-AR', { timeZone: 'UTC' })
+        : '—';
     const publicLink = `${window.location.origin}/index.html?avisoId=${aviso.id}`;
     linkPostulanteInput.value = publicLink;
     abrirLinkBtn.href = publicLink;
@@ -152,9 +155,8 @@ function renderCondiciones(listElement, condiciones, emptyMessage) {
 }
 
 // --- MANEJO DE EVENTOS DE BOTONES ---
-copiarLinkBtn.addEventListener('click', () => {
-    linkPostulanteInput.select();
-    document.execCommand('copy');
+copiarLinkBtn.addEventListener('click', async () => {
+    await copiarAlPortapapeles(linkPostulanteInput.value, linkPostulanteInput);
     copiarLinkBtn.innerHTML = '<i class="fa-solid fa-check"></i>';
     setTimeout(() => {
         copiarLinkBtn.innerHTML = '<i class="fa-solid fa-copy"></i>';
@@ -215,7 +217,7 @@ async function setupModal(modal, contentEl, footerEl, type) {
         <select id="modal-select-${type}" class="form-control">
             <option value="">Selecciona ${selectLabel}...</option>
             ${allOption}
-            ${items.map(item => `<option value="${item.id}">${item.titulo || item.nombre}</option>`).join('')}
+            ${items.map(item => `<option value="${item.id}">${escapeHtml(item.titulo || item.nombre)}</option>`).join('')}
         </select>
         <div id="modal-candidates-container-${type}" style="margin-top: 1rem;"></div>`;
 
@@ -231,21 +233,25 @@ async function setupModal(modal, contentEl, footerEl, type) {
         }
         candidatesContainer.innerHTML = '<p>Cargando candidatos...</p>';
         
-        let query;
-        if (type === 'aviso') {
-            query = supabase.from('v2_postulaciones').select('v2_candidatos(id, nombre_candidato)').eq('aviso_id', selectedId);
-        } else { // db
-            query = supabase.from('v2_candidatos').select('id, nombre_candidato');
-            if (selectedId !== 'all') {
-                query = query.eq('carpeta_id', selectedId);
-            }
+        // La API devuelve de a 1000 filas: traerTodas pagina hasta tener la lista completa.
+        let data;
+        try {
+            data = await traerTodas(() => {
+                if (type === 'aviso') {
+                    return supabase.from('v2_postulaciones').select('id, v2_candidatos(id, nombre_candidato)').eq('aviso_id', selectedId).order('id');
+                }
+                let query = supabase.from('v2_candidatos').select('id, nombre_candidato').order('id');
+                if (selectedId !== 'all') query = query.eq('carpeta_id', selectedId);
+                return query;
+            });
+        } catch (error) {
+            console.error(error);
+            candidatesContainer.innerHTML = '<p class="text-danger">Error al cargar candidatos.</p>';
+            return;
         }
-        
-        const { data, error } = await query;
-        if (error) { candidatesContainer.innerHTML = '<p class="text-danger">Error al cargar candidatos.</p>'; return; }
 
         const candidatos = (type === 'aviso' ? data.map(p => p.v2_candidatos).filter(Boolean) : data)
-                           .sort((a, b) => a.nombre_candidato.localeCompare(b.nombre_candidato));
+                           .sort((a, b) => (a.nombre_candidato || '').localeCompare(b.nombre_candidato || ''));
 
         if (candidatos.length > 0) {
             candidatesContainer.innerHTML = `
@@ -254,7 +260,7 @@ async function setupModal(modal, contentEl, footerEl, type) {
                     <label class="select-all-folder-label"><input type="checkbox" class="select-all-modal-cb"> Seleccionar Todos</label>
                 </div>
                 <ul class="candidate-list-modal">
-                    ${candidatos.map(c => `<li><label><input type="checkbox" class="candidato-checkbox-${type}" value="${c.id}"> ${c.nombre_candidato}</label></li>`).join('')}
+                    ${candidatos.map(c => `<li><label><input type="checkbox" class="candidato-checkbox-${type}" value="${c.id}"> ${escapeHtml(c.nombre_candidato)}</label></li>`).join('')}
                 </ul>`;
         } else {
             candidatesContainer.innerHTML = '<p>No se encontraron candidatos.</p>';
@@ -326,17 +332,19 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
     try {
         // 2. Verificar candidatos existentes
         statusText.textContent = 'Verificando candidatos existentes...';
-        const { data: existingPostulaciones, error: checkError } = await supabase
-            .from('v2_postulaciones')
-            .select('candidato_id')
-            .eq('aviso_id', currentAvisoId)
-            .in('candidato_id', selectedIds);
+        const existingCandidatoIds = new Set();
+        for (const lote of enLotes(selectedIds)) {
+            const { data: existingPostulaciones, error: checkError } = await supabase
+                .from('v2_postulaciones')
+                .select('candidato_id')
+                .eq('aviso_id', currentAvisoId)
+                .in('candidato_id', lote);
 
-        if (checkError) {
-            throw new Error(`Error verificando postulaciones: ${checkError.message}`);
+            if (checkError) {
+                throw new Error(`Error verificando postulaciones: ${checkError.message}`);
+            }
+            existingPostulaciones.forEach(p => existingCandidatoIds.add(p.candidato_id));
         }
-
-        const existingCandidatoIds = new Set(existingPostulaciones.map(p => p.candidato_id));
         const nuevosCandidatoIds = selectedIds.map(Number).filter(id => !existingCandidatoIds.has(id));
         const existentes = selectedIds.length - nuevosCandidatoIds.length;
         let totalAgregados = 0;
@@ -364,9 +372,10 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
             progressBar.style.width = `${percentage}%`;
             percentageText.textContent = `${percentage}% completado`;
 
+            // El archivo queda en Storage: la postulación solo guarda la referencia.
             const { data: candidatosData, error: fetchError } = await supabase
                 .from('v2_candidatos')
-                .select('id, texto_cv_general, nombre_archivo_general, base64_general')
+                .select('id, texto_cv_general, nombre_archivo_general, cv_path')
                 .in('id', batchIds);
 
             if (fetchError) throw new Error(`Error obteniendo datos (lote ${i / BATCH_SIZE + 1}): ${fetchError.message}`);
@@ -376,7 +385,7 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
                 aviso_id: currentAvisoId,
                 texto_cv_especifico: c.texto_cv_general,
                 nombre_archivo_especifico: c.nombre_archivo_general,
-                base64_cv_especifico: c.base64_general,
+                cv_path: c.cv_path,
                 calificacion: null
             }));
 
@@ -397,7 +406,7 @@ async function addSelectedCandidatos(selectedIds, fromModal) {
 
     } catch (error) {
         console.error("Error en el proceso de agregar candidatos:", error);
-        statusText.innerHTML = `<strong>Ocurrió un Error</strong><br><br>${error.message}`;
+        statusText.innerHTML = `<strong>Ocurrió un Error</strong><br><br>${escapeHtml(error.message)}`;
         progressBar.style.backgroundColor = 'var(--danger-color)';
         percentageText.textContent = 'Fallo';
         modalFooter.innerHTML = `<button type="button" class="btn btn-secondary" onclick="window.location.reload()">Cerrar e Intentar de Nuevo</button>`;

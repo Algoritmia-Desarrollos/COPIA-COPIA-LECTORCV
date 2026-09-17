@@ -1,7 +1,9 @@
 [functions]
 
-[functions.openaiv2]  # <--- ESTO ES LO QUE TE FALTA
+# Pública: la usan los links para postulantes. La autorización de las acciones
+# de miembros se valida dentro de la función.
+[functions.selectacv]
   verify_jwt = false
 
-[functions.v2-process-cv]
+[functions.openaiv2]
   verify_jwt = false

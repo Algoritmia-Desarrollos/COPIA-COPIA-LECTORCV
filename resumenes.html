@@ -7,10 +7,11 @@
 
   <script type="module" src="src/auth-guard.js"></script>
 
+  <link rel="preconnect" href="https://czocbnyoenjbpxmcqobn.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
 </head>
 <body>
@@ -51,7 +52,7 @@
             <div class="actions-group">
                 <button id="upload-cv-btn" class="btn btn-primary"><i class="fa-solid fa-upload"></i> Cargar CVs</button>
                 <button id="reanalize-btn" class="btn btn-warning"><i class="fa-solid fa-arrows-rotate"></i> Reanálisis</button>
-                <button id="export-csv-btn" class="btn btn-secondary"><i class="fa-solid fa-file-csv"></i> CSV</button>
+                <button id="export-csv-btn" class="btn btn-secondary"><i class="fa-solid fa-file-excel"></i> Excel</button>
                 <a id="details-link-btn" class="btn btn-secondary" href="#"><i class="fa-solid fa-circle-info"></i> Detalles</a>
                 <a href="lista-avisos.html" class="btn btn-secondary"><i class="fa-solid fa-arrow-left"></i> Volver</a>
             </div>
@@ -149,8 +150,6 @@
 </div>
 
   <script>document.querySelector('.nav-toggle').addEventListener('click', () => {document.querySelector('.nav-menu').classList.toggle('active');});</script>
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/exceljs/dist/exceljs.min.js"></script>
   <script type="module" src="src/resumenes.js"></script>
 </body>
 </html>

@@ -6,13 +6,30 @@ import { supabase } from './supabaseClient.js';
 const { data: { session } } = await supabase.auth.getSession();
 
 if (!session) {
-    // Si NO hay sesión, no permitimos que se cargue la página
-    // y redirigimos al usuario a la página de login.
-    alert("Acceso denegado. Por favor, inicia sesión para continuar.");
-    window.location.href = '/login.html';
+    window.location.replace('login.html');
+} else {
+    await verificarMiembro(session.user.id);
 }
 
-// Si el script llega hasta aquí, significa que hay una sesión activa.
+// Los usuarios del proyecto son compartidos con otras apps: además de tener
+// sesión, el usuario tiene que estar habilitado para SelectaCV.
+async function verificarMiembro(userId) {
+    const clave = `selectacv-miembro-${userId}`;
+    try {
+        if (sessionStorage.getItem(clave) === '1') return;
+    } catch (_) { /* almacenamiento no disponible */ }
+
+    const { data: esMiembro, error } = await supabase.rpc('v2_es_miembro');
+    if (error) return; // sin conexión: las consultas igual quedan protegidas por la base
+    if (!esMiembro) {
+        await supabase.auth.signOut();
+        window.location.replace('login.html?sinacceso=1');
+        return;
+    }
+    try {
+        sessionStorage.setItem(clave, '1');
+    } catch (_) { /* almacenamiento no disponible */ }
+}
 
 const initUI = async () => {
     const logoutBtn = document.getElementById('logout-btn');
@@ -33,9 +50,7 @@ const initUI = async () => {
         if (linkPage === currentPage || (isMisBusquedas && linkPage === 'lista-avisos.html')) {
             link.classList.add('active');
         }
-    }); // Cerramos el forEach
-
-    // (Lógica de badge eliminada según solicitud del usuario)
+    });
 };
 
 if (document.readyState === 'loading') {
