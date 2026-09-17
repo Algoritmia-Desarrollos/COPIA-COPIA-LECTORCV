@@ -26,13 +26,22 @@ export async function llamarFuncion(accion, datos = {}) {
  * por pedido, así que se pagina. `construirConsulta` debe ordenar por una columna única.
  */
 export async function traerTodas(construirConsulta, tamanio = 1000) {
-    const filas = [];
-    for (let desde = 0; ; desde += tamanio) {
-        const { data, error } = await construirConsulta().range(desde, desde + tamanio - 1);
-        if (error) throw error;
-        filas.push(...data);
-        if (data.length < tamanio) return filas;
+    // El primer pedido trae además el total, así el resto de las páginas se piden en paralelo.
+    const { data, error, count } = await construirConsulta({ count: 'exact' }).range(0, tamanio - 1);
+    if (error) throw error;
+    if (count === null || count <= data.length) return data;
+
+    const paginas = [];
+    for (let desde = tamanio; desde < count; desde += tamanio) {
+        paginas.push(construirConsulta().range(desde, desde + tamanio - 1));
     }
+    const resultados = await Promise.all(paginas);
+    const filas = [...data];
+    for (const r of resultados) {
+        if (r.error) throw r.error;
+        filas.push(...r.data);
+    }
+    return filas;
 }
 
 /** Divide una lista en lotes (para no armar URLs gigantes con filtros `in`). */

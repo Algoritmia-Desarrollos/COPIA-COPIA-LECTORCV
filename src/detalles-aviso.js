@@ -236,11 +236,11 @@ async function setupModal(modal, contentEl, footerEl, type) {
         // La API devuelve de a 1000 filas: traerTodas pagina hasta tener la lista completa.
         let data;
         try {
-            data = await traerTodas(() => {
+            data = await traerTodas((opciones) => {
                 if (type === 'aviso') {
-                    return supabase.from('v2_postulaciones').select('id, v2_candidatos(id, nombre_candidato)').eq('aviso_id', selectedId).order('id');
+                    return supabase.from('v2_postulaciones').select('id, v2_candidatos(id, nombre_candidato)', opciones).eq('aviso_id', selectedId).order('id');
                 }
-                let query = supabase.from('v2_candidatos').select('id, nombre_candidato').order('id');
+                let query = supabase.from('v2_candidatos').select('id, nombre_candidato', opciones).order('id');
                 if (selectedId !== 'all') query = query.eq('carpeta_id', selectedId);
                 return query;
             });

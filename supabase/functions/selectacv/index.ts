@@ -10,7 +10,7 @@
 //   calificar      -> analiza una postulación con IA y guarda el puntaje
 //   generar-aviso  -> propone descripción y condiciones para un aviso
 // Acciones internas (header x-selectacv-admin con la clave secreta):
-//   calificar, migrar-cvs
+//   calificar
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { decodeBase64 } from "jsr:@std/encoding@1/base64";
@@ -90,11 +90,6 @@ Deno.serve(async (req) => {
       case "generar-aviso": {
         if (!(await usuarioMiembro(req))) throw new HttpError(401, "No autorizado.");
         return respuesta(await generarAviso(String(body.titulo ?? "")));
-      }
-
-      case "migrar-cvs": {
-        if (!esAdminInterno(req)) throw new HttpError(401, "No autorizado.");
-        return respuesta(await migrarCvs(body));
       }
 
       default:
@@ -670,56 +665,4 @@ async function generarAviso(titulo: string) {
     condiciones_necesarias: lista(r.condiciones_necesarias),
     condiciones_deseables: lista(r.condiciones_deseables),
   };
-}
-
-// --- MIGRACIÓN DE CVs EN BASE64 A STORAGE (uso interno, por lotes) ---
-
-async function migrarCvs(body: Record<string, any>) {
-  const esCandidatos = body.tabla === "candidatos";
-  const tabla = esCandidatos ? "v2_candidatos" : "v2_postulaciones";
-  const columnaB64 = esCandidatos ? "base64_general" : "base64_cv_especifico";
-  const limite = Math.min(Math.max(Number(body.limite) || 20, 1), 50);
-  const modulo = Math.max(Number(body.modulo) || 1, 1);
-  const resto = Number(body.resto) || 0;
-
-  const { data: ids, error } = await admin.rpc("v2_ids_sin_migrar", {
-    p_tabla: tabla,
-    p_limite: limite,
-    p_modulo: modulo,
-    p_resto: resto,
-  });
-  if (error) throw error;
-
-  const errores: string[] = [];
-  let migrados = 0;
-  for (const { id } of ids ?? []) {
-    try {
-      const { data: fila, error: errFila } = await admin.from(tabla).select(columnaB64).eq("id", id).single();
-      if (errFila) throw errFila;
-      const dataUrl: string = (fila as Record<string, string>)[columnaB64] ?? "";
-      const coincidencia = dataUrl.match(/^data:([^;,]+)[^,]*,/);
-      const tipo = coincidencia?.[1] ?? "application/pdf";
-      const ext = EXTENSIONES[tipo] ?? "pdf";
-      const bytes = decodeBase64(dataUrl.slice(coincidencia ? coincidencia[0].length : 0));
-
-      const ruta = `migrados/${esCandidatos ? "candidatos" : "postulaciones"}/${id}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
-      const { error: errSubida } = await admin.storage.from(BUCKET).upload(ruta, bytes, {
-        contentType: EXTENSIONES[tipo] ? tipo : "application/pdf",
-      });
-      if (errSubida) throw new Error(errSubida.message);
-
-      const { data: actualizada, error: errUpd } = await admin
-        .from(tabla)
-        .update({ cv_path: ruta })
-        .eq("id", id)
-        .is("cv_path", null)
-        .select("id");
-      if (errUpd) throw errUpd;
-      if (!actualizada?.length) await admin.storage.from(BUCKET).remove([ruta]);
-      else migrados++;
-    } catch (e) {
-      errores.push(`${id}: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  return { migrados, revisados: ids?.length ?? 0, errores };
 }

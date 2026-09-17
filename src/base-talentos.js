@@ -74,14 +74,13 @@ const ESTADOS_PIPELINE = [
 
 // --- INICIALIZACIÓN ---
 window.addEventListener('DOMContentLoaded', async () => {
+    // Candidatos, carpetas y avisos se piden a la vez.
+    loadCandidates();
     await Promise.all([
         loadFolders(),
         loadAvisos()
     ]);
-    const allCandidatesElement = folderList.querySelector("[data-folder-id='all']");
-    if (allCandidatesElement) {
-        handleFolderClick('all', 'Todos los Candidatos', allCandidatesElement);
-    }
+    folderList.querySelector("[data-folder-id='all']")?.classList.add('active');
 
     const reloadCandidatesOnChange = () => {
         currentOffset = 0;
@@ -802,7 +801,7 @@ async function selectAllMatching() {
     btn.disabled = true;
     try {
         const select = currentAvisoId !== 'all' ? 'id, v2_postulaciones!inner(aviso_id)' : 'id';
-        const data = await traerTodas(() => aplicarFiltros(supabase.from('v2_candidatos').select(select)).order('id'));
+        const data = await traerTodas((opciones) => aplicarFiltros(supabase.from('v2_candidatos').select(select, opciones)).order('id'));
         allMatchingIds = data.map(c => c.id.toString());
         isSelectAllMatchingActive = true;
         updateBulkActionsVisibility();
@@ -1054,7 +1053,7 @@ async function exportarExcel() {
             ? 'id, nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre), v2_postulaciones!inner(aviso_id)'
             : 'id, nombre_candidato, email, telefono, estado, created_at, v2_carpetas(nombre)';
         const [data, ExcelJS] = await Promise.all([
-            traerTodas(() => aplicarFiltros(supabase.from('v2_candidatos').select(select))
+            traerTodas((opciones) => aplicarFiltros(supabase.from('v2_candidatos').select(select, opciones))
                 .order(currentSort.column, { ascending: currentSort.ascending })
                 .order('id', { ascending: false })),
             cargarExcelJS(),

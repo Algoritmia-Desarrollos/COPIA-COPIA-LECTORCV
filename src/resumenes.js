@@ -161,13 +161,18 @@ function applyFiltersAndSort() {
 }
 
 
+function actualizarContador() {
+    const maxCv = avisoActivo?.max_cv || 'Ilimitados';
+    postulantesCountDisplay.innerHTML = `Total de postulantes: <strong>${postulacionesCache.length} / ${maxCv}</strong>`;
+}
+
 async function cargarDatosDeAviso(avisoId) {
     try {
-        const { data, error } = await supabase
-            .from('v2_avisos')
-            .select('id, titulo, max_cv')
-            .eq('id', avisoId)
-            .single();
+        // El aviso y sus postulantes se piden a la vez.
+        const [{ data, error }] = await Promise.all([
+            supabase.from('v2_avisos').select('id, titulo, max_cv').eq('id', avisoId).single(),
+            cargarPostulantes(avisoId),
+        ]);
         if (error) throw error;
 
         avisoActivo = data;
@@ -175,8 +180,7 @@ async function cargarDatosDeAviso(avisoId) {
         if (detailsLinkBtn) {
             detailsLinkBtn.href = `detalles-aviso.html?id=${avisoId}`;
         }
-
-        await cargarPostulantes(avisoId);
+        actualizarContador();
         analizarPostulantesPendientes();
 
     } catch (error) {
@@ -192,12 +196,12 @@ async function cargarPostulantes(avisoId) {
     // El análisis completo (resumen) se trae recién al abrirlo: la lista carga mucho más rápido.
     let data;
     try {
-        data = await traerTodas(() => supabase
+        data = await traerTodas((opciones) => supabase
             .from('v2_postulaciones')
             .select(`
                 id, calificacion, notas, nombre_archivo_especifico, created_at,
                 v2_candidatos (id, nombre_candidato, email, telefono, read, estado)
-            `)
+            `, opciones)
             .eq('aviso_id', avisoId)
             .order('id'));
     } catch (error) {
@@ -207,8 +211,7 @@ async function cargarPostulantes(avisoId) {
     }
 
     postulacionesCache = data;
-    const maxCv = avisoActivo?.max_cv || 'Ilimitados';
-    postulantesCountDisplay.innerHTML = `Total de postulantes: <strong>${postulacionesCache.length} / ${maxCv}</strong>`;
+    actualizarContador();
     applyFiltersAndSort();
     renderStatsBar();
     processingStatus.innerHTML = '';
@@ -537,8 +540,7 @@ bulkDeleteBtn.addEventListener('click', async () => {
             const borrar = new Set(idsToDelete);
             postulacionesCache = postulacionesCache.filter(p => !borrar.has(p.id));
             selectAllCheckbox.checked = false;
-            const maxCv = avisoActivo?.max_cv || 'Ilimitados';
-            postulantesCountDisplay.innerHTML = `Total de postulantes: <strong>${postulacionesCache.length} / ${maxCv}</strong>`;
+            actualizarContador();
             applyFiltersAndSort();
             renderStatsBar();
         }
