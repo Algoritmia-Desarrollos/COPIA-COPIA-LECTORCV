@@ -311,10 +311,11 @@ function updateModalFooter(modalBody, modalFooter, type) {
 async function addSelectedCandidatos(selectedIds, fromModal) {
     const modalBody = fromModal.querySelector('.modal-body');
     const modalFooter = fromModal.querySelector('.modal-footer');
-    const progressContainer = fromModal.querySelector('#aviso-modal-progress-container');
-    const progressBar = fromModal.querySelector('#aviso-modal-progress-bar');
-    const statusText = fromModal.querySelector('#aviso-modal-status-text');
-    const percentageText = fromModal.querySelector('#aviso-modal-percentage');
+    // Cada modal (desde base / desde aviso) tiene su propio bloque de progreso.
+    const progressContainer = fromModal.querySelector('.progreso-agregar');
+    const progressBar = fromModal.querySelector('.progreso-barra');
+    const statusText = fromModal.querySelector('.progreso-texto');
+    const percentageText = fromModal.querySelector('.progreso-porcentaje');
 
     if (selectedIds.length === 0) {
         alert('No has seleccionado ningún candidato.');
